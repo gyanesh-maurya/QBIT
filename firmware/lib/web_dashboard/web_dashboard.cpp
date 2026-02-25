@@ -5,6 +5,9 @@
 #if defined(ESP32) || defined(ESP8266)
 #include <WiFi.h>
 #endif
+#if defined(ESP32)
+#include <esp_system.h>
+#endif
 
 // ==========================================================================
 //  Upload state
@@ -77,6 +80,10 @@ static void handleCSS(AsyncWebServerRequest *request) {
 
 static void handleScript(AsyncWebServerRequest *request) {
     serveFile(request, "/script.js", "application/javascript");
+}
+
+static void handleJszip(AsyncWebServerRequest *request) {
+    serveFile(request, "/jszip.min.js", "application/javascript");
 }
 
 static void handleFont(AsyncWebServerRequest *request) {
@@ -249,6 +256,25 @@ static void handleUploadData(AsyncWebServerRequest *request,
     }
 }
 
+// Serve a single .qgif file by name (for backup download; ensures correct binary response)
+static void handleGetFile(AsyncWebServerRequest *request) {
+    if (!request->hasParam("name")) {
+        request->send(400, "text/plain", "Missing name");
+        return;
+    }
+    String name = sanitizeFileBasename(request->getParam("name")->value());
+    if (name.length() == 0 || !name.endsWith(".qgif")) {
+        request->send(400, "text/plain", "Invalid name");
+        return;
+    }
+    String path = "/" + name;
+    if (!LittleFS.exists(path)) {
+        request->send(404, "text/plain", "Not found");
+        return;
+    }
+    request->send(LittleFS, path, "application/octet-stream");
+}
+
 static void handleDelete(AsyncWebServerRequest *request) {
     if (!request->hasParam("name")) {
         request->send(400, "application/json", "{\"error\":\"Missing name\"}");
@@ -335,6 +361,28 @@ static void handlePlay(AsyncWebServerRequest *request) {
 
     gifPlayerSetFile(name);
     request->send(200, "application/json", "{\"ok\":true}");
+}
+
+// ==========================================================================
+//  Handlers -- WiFi reset and Reboot (extern from network_task / ESP)
+// ==========================================================================
+
+extern void networkWifiReset();
+
+static void handleWifiReset(AsyncWebServerRequest *request) {
+    request->send(200, "application/json", "{\"ok\":true}");
+    networkWifiReset();
+}
+
+static void handleReboot(AsyncWebServerRequest *request) {
+    request->send(200, "application/json", "{\"ok\":true,\"rebooting\":true}");
+#if defined(ESP32)
+    esp_restart();
+#elif defined(ESP8266)
+    ESP.restart();
+#else
+    (void)0;
+#endif
 }
 
 // ==========================================================================
@@ -518,6 +566,7 @@ void webDashboardInit(AsyncWebServer &server) {
     server.on("/favicon.ico",       HTTP_GET,  handleFavicon);
     server.on("/style.css",         HTTP_GET,  handleCSS);
     server.on("/script.js",         HTTP_GET,  handleScript);
+    server.on("/jszip.min.js",      HTTP_GET,  handleJszip);
     server.on("/inter-latin.woff2", HTTP_GET,  handleFont);
 
     // API endpoints
@@ -527,10 +576,13 @@ void webDashboardInit(AsyncWebServer &server) {
     server.on("/api/delete",   HTTP_POST, handleDelete);
     server.on("/api/play",     HTTP_POST, handlePlay);
     server.on("/api/current",  HTTP_GET,  handleCurrent);
+    server.on("/api/file",     HTTP_GET,  handleGetFile);
     server.on("/api/settings",      HTTP_GET,  handleGetSettings);
     server.on("/api/settings",      HTTP_POST, handlePostSettings);
     server.on("/api/device",        HTTP_GET,  handleGetDevice);
     server.on("/api/device",        HTTP_POST, handlePostDevice);
+    server.on("/api/wifi-reset",    HTTP_POST, handleWifiReset);
+    server.on("/api/reboot",        HTTP_POST, handleReboot);
     server.on("/api/mqtt",          HTTP_GET,  handleGetMqtt);
     server.on("/api/mqtt",          HTTP_POST, handlePostMqtt);
     server.on("/api/pins",          HTTP_GET,  handleGetPins);

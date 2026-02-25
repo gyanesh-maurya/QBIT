@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <link rel="icon" type="image/svg+xml" href="/icon.svg">
   <meta name="theme-color" content="#0e0e0e">
   <title>QBIT Dashboard</title>
@@ -43,16 +43,29 @@
     <div class="setting">
       <label class="setting-label">ID</label>
       <span class="setting-val-wide" id="devId">--</span>
+      <span class="pill pill-hint" title="Use this ID to claim the device">Pair your account</span>
     </div>
     <div class="setting">
       <label class="setting-label">Name</label>
       <input type="text" id="devName" class="input-text" maxlength="32" placeholder="Device name">
     </div>
     <button class="btn btn-save" id="btnDevSave">Save Name</button>
+    <div class="device-actions">
+      <button class="btn btn-secondary" id="btnWifiReset">WiFi Reset</button>
+      <button class="btn btn-secondary" id="btnReboot">Reboot</button>
+    </div>
+    <div class="msg" id="devMsg"></div>
   </div>
 
   <div class="card" id="fl">
-    <div class="card-title">Files</div>
+    <div class="card-title card-title-row">
+      <span class="card-title-text">Files</span>
+      <button class="pill-btn" id="btnBackupAll" type="button">Backup</button>
+    </div>
+    <div class="backup-progress-wrap" id="backupProgressWrap" style="display:none" aria-hidden="true">
+      <div class="backup-progress-bar"><div class="backup-progress-fill" id="backupProgressFill" style="width:0%"></div></div>
+      <span class="backup-progress-pct" id="backupProgressPct">0%</span>
+    </div>
     <div class="preview-wrap" id="previewWrap" style="display:none">
       <canvas id="previewCanvas" width="256" height="128"></canvas>
       <div class="preview-name" id="previewName"></div>
@@ -171,6 +184,7 @@
   </div>
 
 
+  <script src="/jszip.min.js"></script>
   <script src="/script.js"></script>
 </body>
 </html>

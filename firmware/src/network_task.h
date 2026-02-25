@@ -18,4 +18,7 @@ void networkSendClaimReject();
 // Time when WiFi was declared lost (0 if connected or not yet lost). Used for AP countdown.
 unsigned long networkGetWifiLostMs();
 
+// Reset WiFi to initial state and remove saved credentials (NetWizard reset). Device will disconnect.
+void networkWifiReset();
+
 #endif // NETWORK_TASK_H

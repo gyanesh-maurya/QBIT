@@ -16,6 +16,11 @@
 #include <ArduinoJson.h>
 #include <ArduinoWebsockets.h>
 #include <PubSubClient.h>
+#if defined(ESP32)
+#include <esp_system.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#endif
 
 // ==========================================================================
 //  Configuration
@@ -561,6 +566,17 @@ void networkTask(void *param) {
 
 unsigned long networkGetWifiLostMs() {
     return _wifiLostMs;
+}
+
+void networkWifiReset() {
+    NW.reset();
+#if defined(ESP32)
+    vTaskDelay(pdMS_TO_TICKS(800));
+    esp_restart();
+#elif defined(ESP8266)
+    delay(800);
+    ESP.restart();
+#endif
 }
 
 // ==========================================================================

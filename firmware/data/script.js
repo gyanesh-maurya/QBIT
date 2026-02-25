@@ -32,6 +32,44 @@ function fmt(b) {
         }, 2000);
       });
   });
+
+  var btnWifiReset = document.getElementById('btnWifiReset');
+  var btnReboot = document.getElementById('btnReboot');
+  var devMsg = document.getElementById('devMsg');
+
+  btnWifiReset.addEventListener('click', function () {
+    if (!confirm('Reset WiFi? The device will disconnect. You can then connect to its AP to choose a new network.')) return;
+    btnWifiReset.disabled = true;
+    devMsg.className = 'msg ok';
+    devMsg.textContent = 'Resetting WiFi...';
+    devMsg.style.display = 'block';
+    fetch('/api/wifi-reset', { method: 'POST' })
+      .then(function () {
+        devMsg.textContent = 'WiFi reset. Device disconnected. Connect to QBIT AP to set a new network.';
+      })
+      .catch(function () {
+        devMsg.className = 'msg';
+        devMsg.textContent = 'Connection lost (device may have disconnected).';
+        btnWifiReset.disabled = false;
+      });
+  });
+
+  btnReboot.addEventListener('click', function () {
+    if (!confirm('Reboot the device?')) return;
+    btnReboot.disabled = true;
+    devMsg.className = 'msg ok';
+    devMsg.textContent = 'Rebooting...';
+    devMsg.style.display = 'block';
+    fetch('/api/reboot', { method: 'POST' })
+      .then(function () {
+        devMsg.textContent = 'Rebooting. Connection will be lost.';
+      })
+      .catch(function () {
+        devMsg.className = 'msg';
+        devMsg.textContent = 'Connection lost (device may be rebooting).';
+        btnReboot.disabled = false;
+      });
+  });
 })();
 
 // MQTT settings -- fetch config and allow saving
@@ -254,15 +292,13 @@ async function lf() {
       emptyDiv.className = 'empty';
       emptyDiv.textContent = 'No .qgif files yet.';
       el.appendChild(emptyDiv);
-      // Update card title (remove file count)
-      var titleEl = el.querySelector('.card-title');
-      if (titleEl) titleEl.innerHTML = 'Files';
+      var titleText = el.querySelector('.card-title-text');
+      if (titleText) titleText.textContent = 'Files';
       return;
     }
 
-    // Update card title with file count
-    var titleEl = el.querySelector('.card-title');
-    if (titleEl) titleEl.innerHTML = 'Files <span class="file-count">' + files.length + '</span>';
+    var titleText = el.querySelector('.card-title-text');
+    if (titleText) titleText.innerHTML = 'Files <span class="file-count">' + files.length + '</span>';
 
     var listDiv = document.createElement('div');
     listDiv.className = 'file-list';
@@ -519,6 +555,81 @@ function startPreview(filename) {
       wrap.style.display = 'none';
     });
 }
+
+// Backup all .qgif files as a zip (client-side: fetch list, fetch each file via /api/file, zip with JSZip, download)
+function backupAllQgif() {
+  if (typeof JSZip === 'undefined') {
+    alert('JSZip not loaded. Check your connection.');
+    return;
+  }
+  var btn = document.getElementById('btnBackupAll');
+  var progressWrap = document.getElementById('backupProgressWrap');
+  var progressFill = document.getElementById('backupProgressFill');
+  var progressPct = document.getElementById('backupProgressPct');
+
+  function showProgress(pct) {
+    progressWrap.style.display = 'flex';
+    progressWrap.setAttribute('aria-hidden', 'false');
+    var v = Math.round(pct || 0);
+    progressFill.style.width = v + '%';
+    progressPct.textContent = v + '%';
+  }
+  function hideProgress() {
+    progressWrap.style.display = 'none';
+    progressWrap.setAttribute('aria-hidden', 'true');
+    progressFill.style.width = '0%';
+    progressPct.textContent = '0%';
+  }
+
+  btn.disabled = true;
+  showProgress(0);
+
+  fetch('/api/list')
+    .then(function (r) { return r.json(); })
+    .then(function (files) {
+      if (!files.length) {
+        alert('No .qgif files to backup.');
+        btn.disabled = false;
+        hideProgress();
+        return;
+      }
+      var zip = new JSZip();
+      var done = 0;
+      function next() {
+        if (done >= files.length) {
+          showProgress(100);
+          return zip.generateAsync({ type: 'blob' }).then(function (blob) {
+            var a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'qbit-qgif-backup.zip';
+            a.click();
+            URL.revokeObjectURL(a.href);
+            btn.disabled = false;
+            hideProgress();
+          });
+        }
+        var f = files[done];
+        return fetch('/api/file?name=' + encodeURIComponent(f.name))
+          .then(function (r) {
+            if (!r.ok) return Promise.reject(new Error('Failed to fetch ' + f.name));
+            return r.arrayBuffer();
+          })
+          .then(function (buf) {
+            zip.file(f.name, buf);
+            done++;
+            showProgress((done / files.length) * 100);
+            return next();
+          });
+      }
+      return next();
+    })
+    .catch(function (err) {
+      alert('Backup failed: ' + (err && err.message ? err.message : 'unknown error'));
+      btn.disabled = false;
+      hideProgress();
+    });
+}
+document.getElementById('btnBackupAll').addEventListener('click', backupAllQgif);
 
 // Track currently playing file and sync highlighting
 var _currentFile = '';
