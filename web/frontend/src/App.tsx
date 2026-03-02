@@ -9,6 +9,7 @@ import ClaimDialog from './components/ClaimDialog';
 import FlashPage from './components/FlashPage';
 import LibraryPage from './components/LibraryPage';
 import type { Device, User, OnlineUser } from './types';
+import { isTTSSupported, speakPokeMessage } from './utils/tts';
 
 export type Page = 'network' | 'flash' | 'library';
 
@@ -61,6 +62,9 @@ export default function App() {
         const next = [...prev, { id, from: data.from, text: data.text }];
         return next.slice(-3);
       });
+      if (isTTSSupported()) {
+        speakPokeMessage(data.from, data.text);
+      }
       setTimeout(() => {
         setNotifications((prev) =>
           prev.map((n) => (n.id === id ? { ...n, exiting: true } : n))
