@@ -12,6 +12,8 @@ import {
   adminDevicesDeleteSchema,
   adminUserIdParamSchema,
   adminDeviceIdParamSchema,
+  adminReportIdParamSchema,
+  adminBroadcastSchema,
 } from '../schemas';
 import {
   ADMIN_USERNAME,
@@ -23,6 +25,7 @@ import * as banService from '../services/ban.service';
 import * as claimService from '../services/claim.service';
 import * as userService from '../services/user.service';
 import * as deviceService from '../services/device.service';
+import * as reportService from '../services/report.service';
 import * as socketService from '../services/socket.service';
 import logger from '../logger';
 
@@ -109,9 +112,27 @@ router.get('/sessions', adminAuth, (_req, res) => {
   res.json(socketService.getSessionsList());
 });
 
-router.get('/users', adminAuth, (_req, res) => {
+router.get('/users', adminAuth, (req, res) => {
   const onlineIds = socketService.getOnlineUserIds();
-  res.json(userService.getAllUsers(onlineIds));
+  const limitParam = req.query.limit;
+  const offsetParam = req.query.offset;
+  if (limitParam === undefined && offsetParam === undefined) {
+    return res.json(userService.getAllUsers(onlineIds));
+  }
+  const limit = Math.min(100, Math.max(1, parseInt(String(limitParam), 10) || 20));
+  const offset = Math.max(0, parseInt(String(offsetParam), 10) || 0);
+  const sortBy = (req.query.sort_by as string) || 'lastSeen';
+  const order = (req.query.order as string) === 'asc' ? 'asc' : 'desc';
+  const q = (req.query.q as string) || '';
+  const validSort = ['userId', 'displayName', 'email', 'lastSeen'].includes(sortBy) ? sortBy : 'lastSeen';
+  const result = userService.getUsersPaginated(onlineIds, {
+    q: q.trim() || undefined,
+    sortBy: validSort as userService.UserSortKey,
+    order,
+    limit,
+    offset,
+  });
+  res.json(result);
 });
 
 router.delete('/users/:userId', adminAuth, validateParams(adminUserIdParamSchema), (req, res) => {
@@ -180,6 +201,33 @@ router.delete('/claim/:deviceId', adminAuth, validateParams(adminDeviceIdParamSc
   claimService.removeClaim(deviceId);
   deviceService.broadcastDevices();
   logger.info({ deviceId }, 'Claim removed by admin');
+  res.json({ ok: true });
+});
+
+// GET /api/reports -- list all user reports
+router.get('/reports', adminAuth, (_req, res) => {
+  res.json(reportService.getAllReports());
+});
+
+// DELETE /api/reports/:id -- delete a report after review
+router.delete('/reports/:id', adminAuth, validateParams(adminReportIdParamSchema), (req, res) => {
+  const id = parseInt(String(req.params.id), 10);
+  if (!reportService.deleteReport(id)) return res.status(404).json({ error: 'Report not found' });
+  logger.info({ reportId: id }, 'Report deleted by admin');
+  res.json({ ok: true });
+});
+
+// POST /api/broadcast -- send message to all online QBIT devices (like poke, source QBIT Network)
+router.post('/broadcast', adminAuth, validate(adminBroadcastSchema), (req, res) => {
+  const { text } = req.body as { text: string };
+  const payload = {
+    type: 'broadcast',
+    sender: 'QBIT Network',
+    title: 'QBIT Network',
+    text: text.substring(0, 100),
+  };
+  deviceService.broadcastToAllDevices(payload);
+  logger.info({ text: payload.text }, 'Admin broadcast sent to all devices');
   res.json({ ok: true });
 });
 

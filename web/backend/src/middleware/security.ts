@@ -87,3 +87,33 @@ export function csrfOriginCheck(req: Request, res: Response, next: NextFunction)
   logger.warn({ origin, referer, path: req.path }, 'CSRF origin check failed');
   res.status(403).json({ error: 'Forbidden: origin mismatch' });
 }
+
+/**
+ * Same-origin check for admin app: only allow state-changing requests when
+ * Origin or Referer matches this app's origin (protocol + host).
+ */
+export function csrfOriginCheckSameOrigin(req: Request, res: Response, next: NextFunction): void {
+  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
+    next();
+    return;
+  }
+  const origin = req.headers.origin;
+  const referer = req.headers.referer;
+  if (!origin && !referer) {
+    next();
+    return;
+  }
+  const host = req.get('host');
+  if (!host) {
+    next();
+    return;
+  }
+  const allowedOrigin = `${req.protocol}://${host}`;
+  const requestOrigin = origin || (referer ? new URL(referer).origin : '');
+  if (requestOrigin === allowedOrigin) {
+    next();
+    return;
+  }
+  logger.warn({ origin, referer, path: req.path }, 'Admin CSRF origin check failed');
+  res.status(403).json({ error: 'Forbidden: origin mismatch' });
+}

@@ -39,7 +39,7 @@ def make_device_name(device_id):
     return f"QBIT-{device_id[-4:]}"
 
 
-def handle_message(ws, device_id, device_name, msg_data, auto_claim):
+def handle_message(ws, device_id, device_name, msg_data, auto_claim, device_index):
     """Process an incoming message from the backend."""
     try:
         msg = json.loads(msg_data)
@@ -54,6 +54,13 @@ def handle_message(ws, device_id, device_name, msg_data, auto_claim):
         has_bitmap = bool(msg.get("senderBitmap"))
         mode = "bitmap" if has_bitmap else "text"
         print(f"  [!] {device_name}  poke ({mode}) from {sender}: {text}")
+
+    elif msg_type == "broadcast":
+        if device_index != 0:
+            return
+        sender = msg.get("sender", "QBIT Network")
+        text = msg.get("text", "")
+        print(f"  [!] broadcast from {sender}: {text}")
 
     elif msg_type == "claim_request":
         user_name = msg.get("userName", "Unknown")
@@ -99,7 +106,7 @@ def device_thread(index, url, stop_event, auto_claim, api_key):
                 try:
                     data = ws.recv()
                     if data:
-                        handle_message(ws, device_id, device_name, data, auto_claim)
+                        handle_message(ws, device_id, device_name, data, auto_claim, index)
                 except websocket.WebSocketTimeoutException:
                     continue
                 except Exception:

@@ -16,10 +16,18 @@ fs.mkdirSync(LIBRARY_FILES, { recursive: true });
 // Prepared statements
 const stmtAll = db.prepare('SELECT * FROM library ORDER BY uploadedAt DESC');
 const stmtInsert = db.prepare(
-  'INSERT INTO library (id, filename, uploader, uploaderId, uploadedAt, size, frameCount) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  'INSERT INTO library (id, filename, uploader, uploaderId, uploadedAt, size, frameCount, downloadCount) VALUES (?, ?, ?, ?, ?, ?, ?, 0)'
 );
 const stmtDelete = db.prepare('DELETE FROM library WHERE id = ?');
+const stmtDeleteStars = db.prepare('DELETE FROM library_stars WHERE libraryId = ?');
 const stmtGetById = db.prepare('SELECT * FROM library WHERE id = ?');
+const stmtIncrementDownload = db.prepare('UPDATE library SET downloadCount = COALESCE(downloadCount, 0) + 1 WHERE id = ?');
+const stmtStarCounts = db.prepare('SELECT libraryId, COUNT(*) as cnt FROM library_stars GROUP BY libraryId');
+const stmtStarGet = db.prepare('SELECT 1 FROM library_stars WHERE userId = ? AND libraryId = ?');
+const stmtStarInsertOrIgnore = db.prepare(
+  'INSERT OR IGNORE INTO library_stars (userId, libraryId) VALUES (?, ?)'
+);
+const stmtStarRemove = db.prepare('DELETE FROM library_stars WHERE userId = ? AND libraryId = ?');
 
 // ---------------------------------------------------------------------------
 //  In-memory cache (Map<id, LibraryItem>)
@@ -29,9 +37,19 @@ const cache = new Map<string, LibraryItem>();
 
 function loadCache(): void {
   cache.clear();
-  const rows = stmtAll.all() as LibraryItem[];
+  const rows = stmtAll.all() as Record<string, unknown>[];
   for (const row of rows) {
-    cache.set(row.id, row);
+    const item: LibraryItem = {
+      id: row.id as string,
+      filename: row.filename as string,
+      uploader: row.uploader as string,
+      uploaderId: row.uploaderId as string,
+      uploadedAt: row.uploadedAt as string,
+      size: (row.size as number) ?? 0,
+      frameCount: (row.frameCount as number) ?? 0,
+      downloadCount: (row.downloadCount as number) ?? 0,
+    };
+    cache.set(item.id, item);
   }
   logger.info({ count: cache.size }, 'Library cache loaded');
 }
@@ -69,8 +87,47 @@ export function contentDisposition(filename: string): string {
 //  Public API
 // ---------------------------------------------------------------------------
 
-export function getAll(): LibraryItem[] {
-  return [...cache.values()];
+export type LibrarySort = 'newest' | 'stars' | 'downloads';
+
+export function getAll(sort: LibrarySort = 'stars', userId?: string): LibraryItem[] {
+  const starRows = stmtStarCounts.all() as { libraryId: string; cnt: number }[];
+  const starCountMap = new Map(starRows.map((r) => [r.libraryId, r.cnt]));
+  const starredSet = new Set<string>();
+  if (userId) {
+    const all = [...cache.values()];
+    for (const item of all) {
+      if ((stmtStarGet.get(userId, item.id) as unknown) != null) starredSet.add(item.id);
+    }
+  }
+  const items: LibraryItem[] = [...cache.values()].map((item) => ({
+    ...item,
+    starCount: starCountMap.get(item.id) ?? 0,
+    starredByMe: userId ? starredSet.has(item.id) : undefined,
+  }));
+  if (sort === 'newest') {
+    items.sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime());
+  } else if (sort === 'stars') {
+    items.sort((a, b) => (b.starCount ?? 0) - (a.starCount ?? 0) || new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime());
+  } else {
+    items.sort((a, b) => (b.downloadCount ?? 0) - (a.downloadCount ?? 0) || new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime());
+  }
+  return items;
+}
+
+export function incrementDownloadCount(id: string): void {
+  const item = cache.get(id);
+  if (!item) return;
+  stmtIncrementDownload.run(id);
+  item.downloadCount = (item.downloadCount ?? 0) + 1;
+}
+
+export function toggleStar(userId: string, libraryId: string): boolean {
+  const item = cache.get(libraryId);
+  if (!item) return false;
+  const result = stmtStarInsertOrIgnore.run(userId, libraryId);
+  if (result.changes === 1) return true;
+  stmtStarRemove.run(userId, libraryId);
+  return false;
 }
 
 export function getById(id: string): LibraryItem | null {
@@ -103,6 +160,7 @@ export function addItem(
     uploadedAt: new Date().toISOString(),
     size: buf.length,
     frameCount,
+    downloadCount: 0,
   };
 
   stmtInsert.run(item.id, item.filename, item.uploader, item.uploaderId, item.uploadedAt, item.size, item.frameCount);
@@ -122,6 +180,7 @@ export function deleteItem(id: string): boolean {
     // file already gone, continue
   }
 
+  stmtDeleteStars.run(id);
   stmtDelete.run(id);
   cache.delete(id);
   return true;
@@ -145,6 +204,7 @@ export function batchDelete(ids: string[], userId: string): { deleted: number; f
         // ignore
       }
 
+      stmtDeleteStars.run(id);
       stmtDelete.run(id);
       cache.delete(id);
       deleted++;

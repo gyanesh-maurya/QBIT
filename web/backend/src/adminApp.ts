@@ -14,7 +14,7 @@ import {
   IS_LOCAL_DEV,
 } from './config';
 import { SQLiteSessionStore } from './db';
-import { helmetMiddleware, permissionsPolicyMiddleware } from './middleware/security';
+import { helmetMiddleware, permissionsPolicyMiddleware, csrfOriginCheckSameOrigin } from './middleware/security';
 import { errorHandler } from './middleware/errorHandler';
 import adminRoutes from './routes/admin.routes';
 import logger from './logger';
@@ -29,6 +29,7 @@ adminApp.set('trust proxy', 1);
 adminApp.use(helmetMiddleware);
 adminApp.use(permissionsPolicyMiddleware);
 adminApp.use(express.json());
+adminApp.use(csrfOriginCheckSameOrigin);
 
 // ---------------------------------------------------------------------------
 //  Session (SQLite-backed, separate cookie name)

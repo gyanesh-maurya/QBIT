@@ -53,10 +53,24 @@ export const adminDevicesDeleteSchema = z.object({
   deviceIds: z.array(z.string().min(1).max(128).regex(/^[a-zA-Z0-9-]+$/)).min(1).max(100),
 });
 
+// POST /api/report (user report for harassment etc.)
+export const reportSchema = z.object({
+  reportedUserId: z.string().min(1).max(256).regex(/^[a-zA-Z0-9@._+-]+$/),
+  description: z.string().max(500).transform((s) => s.trim()).pipe(z.string().min(1)),
+});
+
+// POST /api/admin/broadcast
+export const adminBroadcastSchema = z.object({
+  text: z.string().min(1).max(100),
+});
+
 // Admin path params (validate to avoid malformed IDs)
 export const adminUserIdParamSchema = z.object({
   userId: z.string().min(1).max(256).regex(/^[a-zA-Z0-9@._+-]+$/),
 });
 export const adminDeviceIdParamSchema = z.object({
   deviceId: z.string().min(1).max(128).regex(/^[a-zA-Z0-9-]+$/),
+});
+export const adminReportIdParamSchema = z.object({
+  id: z.string().regex(/^\d+$/),
 });

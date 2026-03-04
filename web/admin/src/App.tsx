@@ -51,6 +51,16 @@ interface BannedList {
   deviceIds: string[];
 }
 
+interface ReportRow {
+  id: number;
+  reporterUserId: string;
+  reporterName: string | null;
+  reportedUserId: string;
+  reportedUserName: string | null;
+  description: string;
+  createdAt: string;
+}
+
 async function load<T>(url: string): Promise<T> {
   const r = await fetch(url, { credentials: 'include' });
   if (r.status === 401) throw new Error('UNAUTHORIZED');
@@ -81,6 +91,12 @@ async function del(url: string, body: object): Promise<void> {
   if (!r.ok) throw new Error(r.statusText);
 }
 
+async function delNoBody(url: string): Promise<void> {
+  const r = await fetch(url, { credentials: 'include', method: 'DELETE' });
+  if (r.status === 401) throw new Error('UNAUTHORIZED');
+  if (!r.ok) throw new Error(r.statusText);
+}
+
 export default function App() {
   const [auth, setAuth] = useState<boolean | null>(null);
   const showLoginModal = auth === false;
@@ -93,6 +109,16 @@ export default function App() {
   const ADMIN_PASSWORD_MAX_LEN = 128;
   const [sessions, setSessions] = useState<Session[]>([]);
   const [users, setUsers] = useState<KnownUser[]>([]);
+  const [userItems, setUserItems] = useState<KnownUser[]>([]);
+  const [userTotal, setUserTotal] = useState(0);
+  const [usersSearchQuery, setUsersSearchQuery] = useState('');
+  const [usersSortBy, setUsersSortBy] = useState<'userId' | 'displayName' | 'email' | 'lastSeen'>('lastSeen');
+  const [usersOrder, setUsersOrder] = useState<'asc' | 'desc'>('desc');
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [reports, setReports] = useState<ReportRow[]>([]);
+  const [broadcastText, setBroadcastText] = useState('');
+  const [broadcastSending, setBroadcastSending] = useState(false);
+  const [showBroadcastConfirm, setShowBroadcastConfirm] = useState(false);
   const [claims, setClaims] = useState<Claim[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
   const [bans, setBans] = useState<BannedList>({ userIds: [], ips: [], deviceIds: [] });
@@ -105,18 +131,20 @@ export default function App() {
     setError(null);
     if (showLoading) setLoading(true);
     try {
-      const [s, u, c, d, b] = await Promise.all([
+      const [s, u, c, d, b, r] = await Promise.all([
         load<Session[]>('/api/sessions'),
         load<KnownUser[]>('/api/users'),
         load<Claim[]>('/api/claims'),
         load<Device[]>('/api/devices'),
         load<BannedList>('/api/bans'),
+        load<ReportRow[]>('/api/reports'),
       ]);
       setSessions(s);
       setUsers(u);
       setClaims(c);
       setDevices(d);
       setBans(b);
+      setReports(r);
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Failed to load';
       if (msg === 'UNAUTHORIZED') {
@@ -415,10 +443,73 @@ export default function App() {
     claims: true,
     sessions: false,
     devices: true,
+    reports: true,
   });
   const toggle = useCallback((key: string) => {
     setCollapsed((prev) => ({ ...prev, [key]: !prev[key] }));
   }, []);
+
+  const PAGE_SIZE = 20;
+  const loadUsersPage = useCallback(
+    async (reset: boolean) => {
+      setUsersLoading(true);
+      const offset = reset ? 0 : userItems.length;
+      try {
+        const params = new URLSearchParams({
+          limit: String(PAGE_SIZE),
+          offset: String(offset),
+          sort_by: usersSortBy,
+          order: usersOrder,
+        });
+        if (usersSearchQuery.trim()) params.set('q', usersSearchQuery.trim());
+        const data = await load<{ items: KnownUser[]; total: number }>(`/api/users?${params}`);
+        if (reset) {
+          setUserItems(data.items ?? []);
+        } else {
+          setUserItems((prev) => [...prev, ...(data.items ?? [])]);
+        }
+        setUserTotal(data.total ?? 0);
+      } catch (e) {
+        if ((e instanceof Error && e.message) === 'UNAUTHORIZED') handleUnauthorized();
+      } finally {
+        setUsersLoading(false);
+      }
+    },
+    [usersSearchQuery, usersSortBy, usersOrder, userItems.length, handleUnauthorized]
+  );
+
+  useEffect(() => {
+    if (auth && !collapsed.users) loadUsersPage(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only refetch when section open or filters change
+  }, [auth, collapsed.users, usersSearchQuery, usersSortBy, usersOrder]);
+
+  const handleBroadcast = useCallback(async () => {
+    const text = broadcastText.trim();
+    if (!text) return;
+    setShowBroadcastConfirm(false);
+    setBroadcastSending(true);
+    try {
+      await post('/api/broadcast', { text });
+      setBroadcastText('');
+    } catch (e) {
+      if ((e instanceof Error && e.message) === 'UNAUTHORIZED') handleUnauthorized();
+      else setError(e instanceof Error ? e.message : 'Broadcast failed');
+    } finally {
+      setBroadcastSending(false);
+    }
+  }, [broadcastText, handleUnauthorized]);
+
+  const handleDeleteReport = useCallback(
+    async (id: number) => {
+      try {
+        await delNoBody(`/api/reports/${id}`);
+        setReports((prev) => prev.filter((x) => x.id !== id));
+      } catch (e) {
+        if ((e instanceof Error && e.message) === 'UNAUTHORIZED') handleUnauthorized();
+      }
+    },
+    [handleUnauthorized]
+  );
 
   // Lookup maps for ban list name resolution
   const userMap = useMemo(() => {
@@ -532,10 +623,7 @@ export default function App() {
               title="Refresh all"
               aria-label="Refresh all"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="23 4 23 10 17 10" />
-                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
-              </svg>
+              <span className="material-symbols-outlined" style={{ fontSize: 16 }} aria-hidden>refresh</span>
             </button>
             <button
               type="button"
@@ -561,356 +649,430 @@ export default function App() {
         )}
 
         <section className="section">
-          <h2 className="section-title">Ban user or IP</h2>
-          <div className="ban-form">
-            <input
-              type="text"
-              placeholder="User ID"
-              value={banUserId}
-              onChange={(e) => setBanUserId(e.target.value)}
-            />
-            <input
-              type="text"
-              placeholder="IP address"
-              value={banIp}
-              onChange={(e) => setBanIp(e.target.value)}
-            />
-            <button className="btn btn-danger" onClick={handleBan} disabled={loading}>
-              Add ban
-            </button>
+          <div className="admin-module-card">
+            <h2 className="section-title">
+              <span className="section-title-icon" aria-hidden>
+                <span className="material-symbols-outlined" style={{ fontSize: 20 }}>campaign</span>
+              </span>
+              Broadcast to all devices
+            </h2>
+            <p className="admin-broadcast-desc">Send a message to all online QBIT devices (like a poke from &quot;QBIT Network&quot;).</p>
+            <div className="ban-form">
+              <input
+                type="text"
+                placeholder="Message (max 100 chars)"
+                value={broadcastText}
+                onChange={(e) => setBroadcastText(e.target.value.slice(0, 100))}
+                maxLength={100}
+                className="admin-broadcast-input"
+              />
+              <button
+                type="button"
+                className="btn btn-danger"
+                onClick={() => broadcastText.trim() && setShowBroadcastConfirm(true)}
+                disabled={!broadcastText.trim() || broadcastSending}
+              >
+                {broadcastSending ? 'Sending...' : 'Broadcast'}
+              </button>
+            </div>
           </div>
         </section>
 
         <section className="section">
-          <div className="section-header-row">
-            <button className="section-toggle" onClick={() => toggle('bans')}>
-              <span className={`section-chevron${collapsed.bans ? '' : ' section-chevron-open'}`}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="9 18 15 12 9 6" />
-                </svg>
+          <div className="admin-module-card">
+            <h2 className="section-title">
+              <span className="section-title-icon" aria-hidden>
+                <span className="material-symbols-outlined" style={{ fontSize: 20 }}>block</span>
               </span>
-              <h2 className="section-title">
-                Current bans (
-                {(bans.userIds?.length ?? 0) + (bans.ips?.length ?? 0) + (bans.deviceIds?.length ?? 0)}
-                )
-              </h2>
-            </button>
-          </div>
-          {!collapsed.bans && (
-            <div className="admin-table-wrap admin-bans-list">
-              <VirtualList
-                itemCount={bansFlat.length}
-                itemHeight={banListRowHeight}
-                containerHeight={VIRTUAL_CONTAINER_HEIGHT}
-                empty={<div className="empty-msg">No bans</div>}
-              >
-                {(i) => {
-                  const entry = bansFlat[i];
-                  if (entry.type === 'user') {
-                    const u = userMap.get(entry.id);
+              Ban user or IP
+            </h2>
+            <div className="ban-form">
+              <input
+                type="text"
+                placeholder="User ID"
+                value={banUserId}
+                onChange={(e) => setBanUserId(e.target.value)}
+              />
+              <input
+                type="text"
+                placeholder="IP address"
+                value={banIp}
+                onChange={(e) => setBanIp(e.target.value)}
+              />
+              <button className="btn btn-danger" onClick={handleBan} disabled={loading}>
+                Add ban
+              </button>
+            </div>
+            <div className="section-header-row admin-subsection-header">
+              <button className="section-toggle" onClick={() => toggle('bans')}>
+                <span className={`section-chevron${collapsed.bans ? '' : ' section-chevron-open'}`}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 14 }} aria-hidden>chevron_right</span>
+                </span>
+                <h3 className="section-subtitle">
+                  Current bans (
+                  {(bans.userIds?.length ?? 0) + (bans.ips?.length ?? 0) + (bans.deviceIds?.length ?? 0)}
+                  )
+                </h3>
+              </button>
+            </div>
+            {!collapsed.bans && (
+              <div className="admin-table-wrap admin-bans-list">
+                <VirtualList
+                  itemCount={bansFlat.length}
+                  itemHeight={banListRowHeight}
+                  containerHeight={VIRTUAL_CONTAINER_HEIGHT}
+                  empty={<div className="empty-msg">No bans</div>}
+                >
+                  {(i) => {
+                    const entry = bansFlat[i];
+                    if (entry.type === 'user') {
+                      const u = userMap.get(entry.id);
+                      return (
+                        <div className="ban-item">
+                          <span>
+                            User: {u ? <strong>{u.displayName}</strong> : null}
+                            {' '}<code>{entry.id}</code>
+                          </span>
+                          <button className="btn btn-ghost" onClick={() => handleUnbanUser(entry.id)}>Unban</button>
+                        </div>
+                      );
+                    }
+                    if (entry.type === 'ip') {
+                      return (
+                        <div className="ban-item">
+                          <span>IP: <code>{entry.id}</code></span>
+                          <button className="btn btn-ghost" onClick={() => handleUnbanIp(entry.id)}>Unban</button>
+                        </div>
+                      );
+                    }
+                    const dName = deviceNameMap.get(entry.id);
                     return (
                       <div className="ban-item">
                         <span>
-                          User: {u ? <strong>{u.displayName}</strong> : null}
+                          Device: {dName ? <strong>{dName}</strong> : null}
                           {' '}<code>{entry.id}</code>
                         </span>
-                        <button className="btn btn-ghost" onClick={() => handleUnbanUser(entry.id)}>Unban</button>
+                        <button className="btn btn-ghost" onClick={() => handleUnbanDevice(entry.id)}>Unban</button>
                       </div>
                     );
-                  }
-                  if (entry.type === 'ip') {
-                    return (
-                      <div className="ban-item">
-                        <span>IP: <code>{entry.id}</code></span>
-                        <button className="btn btn-ghost" onClick={() => handleUnbanIp(entry.id)}>Unban</button>
-                      </div>
-                    );
-                  }
-                  const dName = deviceNameMap.get(entry.id);
-                  return (
-                    <div className="ban-item">
-                      <span>
-                        Device: {dName ? <strong>{dName}</strong> : null}
-                        {' '}<code>{entry.id}</code>
-                      </span>
-                      <button className="btn btn-ghost" onClick={() => handleUnbanDevice(entry.id)}>Unban</button>
-                    </div>
-                  );
-                }}
-              </VirtualList>
-            </div>
-          )}
+                  }}
+                </VirtualList>
+              </div>
+            )}
+          </div>
         </section>
 
         <section className="section">
           <div className="section-header-row">
-            <button className="section-toggle" onClick={() => toggle('users')}>
-              <span className={`section-chevron${collapsed.users ? '' : ' section-chevron-open'}`}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="9 18 15 12 9 6" />
-                </svg>
-              </span>
-              <h2 className="section-title">Users ({users.length})</h2>
-            </button>
+            <div className="section-title-group">
+              <button
+                type="button"
+                className="section-chevron-btn"
+                onClick={() => toggle('users')}
+                aria-label={collapsed.users ? 'Expand Users' : 'Collapse Users'}
+              >
+                <span className={`section-chevron${collapsed.users ? '' : ' section-chevron-open'}`}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 14 }} aria-hidden>chevron_right</span>
+                </span>
+              </button>
+              <h2 className="section-title">
+                <span className="section-title-icon" aria-hidden>
+                  <span className="material-symbols-outlined" style={{ fontSize: 20 }}>group</span>
+                </span>
+                Users
+              </h2>
+            </div>
             <div className="section-actions">
-              {loading && <span className="admin-loading">Updating...</span>}
+              {usersLoading && <span className="admin-loading">Loading...</span>}
             </div>
           </div>
           {!collapsed.users && (
-            <VirtualList
-              itemCount={users.length}
-              itemHeight={listRowHeight}
-              containerHeight={VIRTUAL_CONTAINER_HEIGHT}
-              empty={!loading ? <div className="empty-msg">No users yet</div> : undefined}
-            >
-              {(i) => {
-                const u = users[i];
-                return (
-                  <div className="admin-user-row">
-                    {u.avatar ? (
-                      <img
-                        src={u.avatar}
-                        alt=""
-                        className="admin-avatar"
-                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                      />
-                    ) : (
-                      <span className="admin-avatar-placeholder" />
-                    )}
-                    <div className="admin-user-info">
-                      <span className="admin-user-name">{u.displayName}</span>
-                      <span className="admin-user-email">{u.email}</span>
-                      <span className="admin-user-meta">
-                        {u.status === 'online' ? (
-                          <span className="admin-status-online">Online</span>
-                        ) : (
-                          <span className="admin-status-offline">Offline</span>
-                        )}
-                        {' · Last seen '}
-                        {new Date(u.lastSeen).toLocaleString()}
-                      </span>
-                    </div>
-                    <div className="admin-user-actions">
-                      <button
-                        className="btn btn-danger"
-                        onClick={() => handleBanSessionUser(u.userId)}
-                      >
-                        Ban user
-                      </button>
-                      <button
-                        className="btn btn-ghost"
-                        onClick={() => handleDeleteUser(u.userId)}
-                        title="Delete user record"
-                      >
-                        Delete user
-                      </button>
-                    </div>
+            <>
+              <div className="admin-users-toolbar">
+                <input
+                  type="text"
+                  placeholder="Search"
+                  value={usersSearchQuery}
+                  onChange={(e) => setUsersSearchQuery(e.target.value)}
+                  className="admin-input admin-search"
+                />
+                <label className="admin-sort-label">Sort by</label>
+                <select
+                  value={usersSortBy}
+                  onChange={(e) => setUsersSortBy(e.target.value as typeof usersSortBy)}
+                  className="admin-input admin-select"
+                >
+                  <option value="userId">User ID</option>
+                  <option value="displayName">Name</option>
+                  <option value="email">Email</option>
+                  <option value="lastSeen">Last seen</option>
+                </select>
+                <select
+                  value={usersOrder}
+                  onChange={(e) => setUsersOrder(e.target.value as 'asc' | 'desc')}
+                  className="admin-input admin-select"
+                >
+                  <option value="asc">Ascending</option>
+                  <option value="desc">Descending</option>
+                </select>
+              </div>
+              {usersLoading && userItems.length === 0 ? (
+                <p className="admin-loading">Loading users...</p>
+              ) : userItems.length === 0 ? (
+                <p className="empty-msg">No users</p>
+              ) : (
+                <>
+                  <p className="admin-list-count">{userItems.length} / {userTotal}</p>
+                  <div className="admin-table-wrap admin-table-fixed admin-table-scroll" style={{ maxHeight: VIRTUAL_CONTAINER_HEIGHT, overflow: 'auto' }}>
+                    <table className="admin-table">
+                      <thead>
+                        <tr>
+                          <th></th>
+                          <th>User ID</th>
+                          <th>Name</th>
+                          <th>Email</th>
+                          <th>Last seen</th>
+                          <th className="admin-th-status">Status</th>
+                          <th>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {userItems.map((u) => (
+                          <tr key={u.userId}>
+                            <td>
+                              {u.avatar ? (
+                                <img
+                                  src={u.avatar}
+                                  alt=""
+                                  className="admin-table-avatar"
+                                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                />
+                              ) : (
+                                <span className="admin-avatar-placeholder admin-table-avatar-placeholder" />
+                              )}
+                            </td>
+                            <td><code style={{ fontSize: '0.85em' }}>{u.userId}</code></td>
+                            <td>{u.displayName || '-'}</td>
+                            <td>{u.email || '-'}</td>
+                            <td>{new Date(u.lastSeen).toLocaleString()}</td>
+                            <td className="admin-td-status">
+                              {u.status === 'online' ? (
+                                <span className="admin-status-online">Online</span>
+                              ) : u.status === 'offline' ? (
+                                <span className="admin-status-offline">Offline</span>
+                              ) : (
+                                <span className="admin-status-offline">-</span>
+                              )}
+                            </td>
+                            <td>
+                              <div className="admin-action-btns">
+                                <button
+                                  className="btn btn-danger"
+                                  onClick={() => handleBanSessionUser(u.userId)}
+                                >
+                                  Ban user
+                                </button>
+                                <button
+                                  className="btn btn-ghost"
+                                  onClick={() => handleDeleteUser(u.userId)}
+                                  title="Delete user record"
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
-                );
-              }}
-            </VirtualList>
-          )}
-        </section>
-
-        <section className="section">
-          <div className="section-header-row">
-            <button className="section-toggle" onClick={() => toggle('claims')}>
-              <span className={`section-chevron${collapsed.claims ? '' : ' section-chevron-open'}`}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="9 18 15 12 9 6" />
-                </svg>
-              </span>
-              <h2 className="section-title">Claims ({claims.length})</h2>
-            </button>
-            <div className="section-actions">
-              {loading && <span className="admin-loading">Updating...</span>}
-            </div>
-          </div>
-          {!collapsed.claims && (
-            <VirtualList
-              itemCount={claims.length}
-              itemHeight={listRowHeight}
-              containerHeight={VIRTUAL_CONTAINER_HEIGHT}
-              empty={!loading ? <div className="empty-msg">No claims</div> : undefined}
-            >
-              {(i) => {
-                const c = claims[i];
-                return (
-                  <div className="admin-claim-row">
-                    {c.userAvatar ? (
-                      <img
-                        src={c.userAvatar}
-                        alt=""
-                        className="admin-avatar"
-                        onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                      />
-                    ) : (
-                      <span className="admin-avatar-placeholder" />
-                    )}
-                    <div className="admin-claim-info">
-                      <span className="admin-claim-device">{c.deviceName || c.deviceId}</span>
-                      <span className="admin-claim-user">Claimed by {c.userName}</span>
-                      <span className="admin-claim-meta">{new Date(c.claimedAt).toLocaleString()}</span>
-                    </div>
-                    <div className="admin-claim-actions">
+                  {userItems.length < userTotal && (
+                    <div className="admin-load-more-wrap">
                       <button
+                        type="button"
                         className="btn btn-ghost"
-                        onClick={() => handleUnclaim(c.deviceId)}
-                        title="Remove claim"
+                        onClick={() => loadUsersPage(false)}
+                        disabled={usersLoading}
                       >
-                        Unclaim
+                        {usersLoading ? 'Loading...' : 'Load more'}
                       </button>
                     </div>
-                  </div>
-                );
-              }}
-            </VirtualList>
-          )}
-        </section>
-
-        <section className="section">
-          <div className="section-header-row">
-            <button className="section-toggle" onClick={() => toggle('sessions')}>
-              <span className={`section-chevron${collapsed.sessions ? '' : ' section-chevron-open'}`}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="9 18 15 12 9 6" />
-                </svg>
-              </span>
-              <h2 className="section-title">Online sessions ({sessions.length})</h2>
-            </button>
-            <div className="section-actions">
-              {loading && <span className="admin-loading">Updating...</span>}
-            </div>
-          </div>
-          {!collapsed.sessions && (
-            <div className="admin-table-wrap admin-table-fixed" style={{ maxHeight: VIRTUAL_CONTAINER_HEIGHT, overflow: 'auto' }}>
-              <table className="admin-table">
-                <thead>
-                  <tr>
-                    <th></th>
-                    <th>Name</th>
-                    <th>Email</th>
-                    <th>User ID</th>
-                    <th>IP</th>
-                    <th>Connected</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sessions.length === 0 && !loading && (
-                    <tr>
-                      <td colSpan={7} className="empty-msg">No sessions</td>
-                    </tr>
                   )}
-                  {sessions.map((s) => (
-                    <tr key={s.socketId}>
-                      <td>
-                        {s.avatar ? (
-                          <img
-                            src={s.avatar}
-                            alt=""
-                            className="admin-table-avatar"
-                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                          />
-                        ) : (
-                          <span className="admin-avatar-placeholder admin-table-avatar-placeholder" />
+                </>
+              )}
+              <div className="admin-subsection">
+                <div className="section-header-row admin-subsection-header">
+                  <button className="section-toggle" onClick={() => toggle('sessions')}>
+                    <span className={`section-chevron${collapsed.sessions ? '' : ' section-chevron-open'}`}>
+                      <span className="material-symbols-outlined" style={{ fontSize: 14 }} aria-hidden>chevron_right</span>
+                    </span>
+                    <h3 className="section-subtitle">Online sessions ({sessions.length})</h3>
+                  </button>
+                  {loading && <span className="admin-loading">Updating...</span>}
+                </div>
+                {!collapsed.sessions && (
+                  <div className="admin-table-wrap admin-table-fixed admin-table-scroll" style={{ maxHeight: VIRTUAL_CONTAINER_HEIGHT, overflow: 'auto' }}>
+                    <table className="admin-table">
+                      <thead>
+                        <tr>
+                          <th></th>
+                          <th>Name</th>
+                          <th>Email</th>
+                          <th>User ID</th>
+                          <th>IP</th>
+                          <th>Connected</th>
+                          <th>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sessions.length === 0 && !loading && (
+                          <tr>
+                            <td colSpan={7} className="empty-msg">No sessions</td>
+                          </tr>
                         )}
-                      </td>
-                      <td>{s.displayName}</td>
-                      <td>{s.email}</td>
-                      <td><code style={{ fontSize: '0.85em' }}>{s.userId}</code></td>
-                      <td>{s.ip}</td>
-                      <td>{new Date(s.connectedAt).toLocaleString()}</td>
-                      <td>
-                        <div className="admin-action-btns">
-                          <button
-                            className="btn btn-danger"
-                            onClick={() => handleBanSessionUser(s.userId)}
-                          >
-                            Ban user
-                          </button>
-                          <button className="btn btn-ghost" onClick={() => handleBanSessionIp(s.ip)}>
-                            Ban IP
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                        {sessions.map((s) => (
+                          <tr key={s.socketId}>
+                            <td>
+                              {s.avatar ? (
+                                <img
+                                  src={s.avatar}
+                                  alt=""
+                                  className="admin-table-avatar"
+                                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                                />
+                              ) : (
+                                <span className="admin-avatar-placeholder admin-table-avatar-placeholder" />
+                              )}
+                            </td>
+                            <td>{s.displayName}</td>
+                            <td>{s.email}</td>
+                            <td><code style={{ fontSize: '0.85em' }}>{s.userId}</code></td>
+                            <td>{s.ip}</td>
+                            <td>{new Date(s.connectedAt).toLocaleString()}</td>
+                            <td>
+                              <div className="admin-action-btns">
+                                <button
+                                  className="btn btn-danger"
+                                  onClick={() => handleBanSessionUser(s.userId)}
+                                >
+                                  Ban user
+                                </button>
+                                <button className="btn btn-ghost" onClick={() => handleBanSessionIp(s.ip)}>
+                                  Ban IP
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </>
           )}
         </section>
 
         <section className="section">
           <div className="section-header-row">
-            <button className="section-toggle" onClick={() => toggle('devices')}>
-              <span className={`section-chevron${collapsed.devices ? '' : ' section-chevron-open'}`}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="9 18 15 12 9 6" />
-                </svg>
-              </span>
-              <h2 className="section-title">Devices ({devices.length})</h2>
-            </button>
+            <div className="section-title-group">
+              <button
+                type="button"
+                className="section-chevron-btn"
+                onClick={() => toggle('devices')}
+                aria-label={collapsed.devices ? 'Expand Devices' : 'Collapse Devices'}
+              >
+                <span className={`section-chevron${collapsed.devices ? '' : ' section-chevron-open'}`}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 14 }} aria-hidden>chevron_right</span>
+                </span>
+              </button>
+              <h2 className="section-title">
+                <span className="section-title-icon" aria-hidden>
+                  <span className="material-symbols-outlined" style={{ fontSize: 20 }}>memory</span>
+                </span>
+                Devices ({devices.length})
+              </h2>
+            </div>
             <div className="section-actions">
               {loading && <span className="admin-loading">Updating...</span>}
             </div>
           </div>
           {!collapsed.devices && (
             <>
-              <div className="admin-devices-toolbar">
-                <div className="admin-sort-group" role="group" aria-label="Sort devices">
-                  <span className="admin-sort-label">Sort by</span>
-                  <div className="admin-sort-pills">
-                    {(
-                      [
-                        ['id', 'ID'],
-                        ['name', 'Name'],
-                        ['ip', 'Local IP'],
-                        ['publicIp', 'Public IP'],
-                        ['version', 'Version'],
-                        ['lastSeen', 'Last seen'],
-                      ] as const
-                    ).map(([key, label]) => (
-                      <button
-                        key={key}
-                        type="button"
-                        className={`admin-pill${deviceSortBy === key ? ' admin-pill-active' : ''}`}
-                        onClick={() => setDeviceSortBy(key)}
-                        aria-pressed={deviceSortBy === key}
-                        aria-label={`Sort by ${label}`}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="admin-sort-order">
-                    <button
-                      type="button"
-                      className={`admin-order-btn${deviceSortOrder === 'asc' ? ' admin-order-btn-active' : ''}`}
-                      onClick={() => setDeviceSortOrder('asc')}
-                      aria-pressed={deviceSortOrder === 'asc'}
-                      title="Ascending"
-                      aria-label="Ascending order"
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M18 15l-6-6-6 6" />
-                      </svg>
-                    </button>
-                    <button
-                      type="button"
-                      className={`admin-order-btn${deviceSortOrder === 'desc' ? ' admin-order-btn-active' : ''}`}
-                      onClick={() => setDeviceSortOrder('desc')}
-                      aria-pressed={deviceSortOrder === 'desc'}
-                      title="Descending"
-                      aria-label="Descending order"
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M6 9l6 6 6-6" />
-                      </svg>
-                    </button>
-                  </div>
+              <div className="admin-subsection">
+                <div className="section-header-row admin-subsection-header">
+                  <button className="section-toggle" onClick={() => toggle('claims')}>
+                    <span className={`section-chevron${collapsed.claims ? '' : ' section-chevron-open'}`}>
+                      <span className="material-symbols-outlined" style={{ fontSize: 14 }} aria-hidden>chevron_right</span>
+                    </span>
+                    <h3 className="section-subtitle">Claimed devices ({claims.length})</h3>
+                  </button>
                 </div>
+                {!collapsed.claims && (
+                  <div className="admin-table-wrap admin-claims-list">
+                    <VirtualList
+                      itemCount={claims.length}
+                      itemHeight={listRowHeight}
+                      containerHeight={VIRTUAL_CONTAINER_HEIGHT}
+                      empty={!loading ? <div className="empty-msg">No claimed devices</div> : undefined}
+                    >
+                      {(i) => {
+                        const c = claims[i];
+                        return (
+                          <div className="admin-claim-row" key={c.deviceId}>
+                            {c.userAvatar ? (
+                              <img
+                                src={c.userAvatar}
+                                alt=""
+                                className="admin-avatar"
+                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                              />
+                            ) : (
+                              <span className="admin-avatar-placeholder" />
+                            )}
+                            <div className="admin-claim-info">
+                              <span className="admin-claim-device">{c.deviceName || c.deviceId}</span>
+                              <span className="admin-claim-user">Claimed by {c.userName}</span>
+                              <span className="admin-claim-meta">{new Date(c.claimedAt).toLocaleString()}</span>
+                            </div>
+                            <div className="admin-claim-actions">
+                              <button
+                                className="btn btn-ghost"
+                                onClick={() => handleUnclaim(c.deviceId)}
+                                title="Remove claim"
+                              >
+                                Unclaim
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      }}
+                    </VirtualList>
+                  </div>
+                )}
+              </div>
+              <div className="admin-users-toolbar">
+                <label className="admin-sort-label">Sort by</label>
+                <select
+                  value={deviceSortBy}
+                  onChange={(e) => setDeviceSortBy(e.target.value as DeviceSortKey)}
+                  className="admin-input admin-select"
+                >
+                  <option value="id">ID</option>
+                  <option value="name">Name</option>
+                  <option value="ip">Local IP</option>
+                  <option value="publicIp">Public IP</option>
+                  <option value="version">Version</option>
+                  <option value="lastSeen">Last seen</option>
+                </select>
+                <select
+                  value={deviceSortOrder}
+                  onChange={(e) => setDeviceSortOrder(e.target.value as 'asc' | 'desc')}
+                  className="admin-input admin-select"
+                >
+                  <option value="asc">Ascending</option>
+                  <option value="desc">Descending</option>
+                </select>
                 {selectedDeviceIds.size > 0 && (
                   <button
                     type="button"
@@ -921,25 +1083,30 @@ export default function App() {
                   </button>
                 )}
               </div>
-              <div className="admin-table-wrap admin-table-fixed" style={{ maxHeight: VIRTUAL_CONTAINER_HEIGHT, overflow: 'auto' }}>
+              <div className="admin-table-wrap admin-table-fixed admin-table-scroll" style={{ maxHeight: VIRTUAL_CONTAINER_HEIGHT, overflow: 'auto' }}>
                 <table className="admin-table">
                   <thead>
                     <tr>
                       <th className="admin-th-checkbox">
-                        <label className="admin-checkbox-wrap">
-                          <input
-                            type="checkbox"
-                            checked={sortedDevices.length > 0 && selectedDeviceIds.size === sortedDevices.length}
-                            onChange={toggleSelectAllDevices}
-                            aria-label="Select all devices"
-                            className="admin-checkbox"
-                          />
-                          <span className="admin-checkbox-box" aria-hidden="true" />
-                        </label>
+                        <button
+                          type="button"
+                          role="checkbox"
+                          aria-checked={sortedDevices.length > 0 && selectedDeviceIds.size === sortedDevices.length}
+                          aria-label="Select all devices"
+                          className="admin-checkbox-btn"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            toggleSelectAllDevices();
+                          }}
+                        >
+                          {sortedDevices.length > 0 && selectedDeviceIds.size === sortedDevices.length ? (
+                            <span className="material-symbols-outlined" style={{ fontSize: 14 }} aria-hidden>check</span>
+                          ) : null}
+                        </button>
                       </th>
                       <th>ID</th>
                       <th>Name</th>
-                      <th>Status</th>
+                      <th className="admin-th-status">Status</th>
                       <th>Local IP</th>
                       <th>Public IP</th>
                       <th>Version</th>
@@ -956,24 +1123,31 @@ export default function App() {
                     {sortedDevices.map((d) => (
                       <tr key={d.id}>
                         <td className="admin-td-checkbox">
-                          <label className="admin-checkbox-wrap">
-                            <input
-                              type="checkbox"
-                              checked={selectedDeviceIds.has(d.id)}
-                              onChange={() => toggleDeviceSelection(d.id)}
-                              aria-label={`Select ${d.name}`}
-                              className="admin-checkbox"
-                            />
-                            <span className="admin-checkbox-box" aria-hidden="true" />
-                          </label>
+                          <button
+                            type="button"
+                            role="checkbox"
+                            aria-checked={selectedDeviceIds.has(d.id)}
+                            aria-label={`Select ${d.name}`}
+                            className="admin-checkbox-btn"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              toggleDeviceSelection(d.id);
+                            }}
+                          >
+                            {selectedDeviceIds.has(d.id) ? (
+                              <span className="material-symbols-outlined" style={{ fontSize: 14 }} aria-hidden>check</span>
+                            ) : null}
+                          </button>
                         </td>
                         <td><code style={{ fontSize: '0.85em' }}>{d.id}</code></td>
                         <td>{d.name}</td>
-                        <td>
+                        <td className="admin-td-status">
                           {d.status === 'online' ? (
                             <span className="admin-status-online">Online</span>
-                          ) : (
+                          ) : d.status === 'offline' ? (
                             <span className="admin-status-offline">Offline</span>
+                          ) : (
+                            <span className="admin-status-offline">-</span>
                           )}
                         </td>
                         <td>{d.ip}</td>
@@ -993,6 +1167,85 @@ export default function App() {
             </>
           )}
         </section>
+
+        <section className="section">
+          <div className="section-header-row">
+            <div className="section-title-group">
+              <button
+                type="button"
+                className="section-chevron-btn"
+                onClick={() => toggle('reports')}
+                aria-label={collapsed.reports ? 'Expand User reports' : 'Collapse User reports'}
+              >
+                <span className={`section-chevron${collapsed.reports ? '' : ' section-chevron-open'}`}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 14 }} aria-hidden>chevron_right</span>
+                </span>
+              </button>
+              <h2 className="section-title">
+                <span className="section-title-icon" aria-hidden>
+                  <span className="material-symbols-outlined" style={{ fontSize: 20 }}>description</span>
+                </span>
+                User reports ({reports.length})
+              </h2>
+            </div>
+          </div>
+          {!collapsed.reports && (
+            reports.length === 0 ? (
+              <div className="admin-table-wrap admin-table-empty">
+                <p className="empty-msg">No reports</p>
+              </div>
+            ) : (
+              <div className="admin-table-wrap admin-table-fixed admin-table-scroll" style={{ maxHeight: VIRTUAL_CONTAINER_HEIGHT, overflow: 'auto' }}>
+                <table className="admin-table">
+                  <thead>
+                    <tr>
+                      <th>ID</th>
+                      <th>Reporter</th>
+                      <th>Reported user</th>
+                      <th>Description</th>
+                      <th>Created</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {reports.map((r) => (
+                      <tr key={r.id}>
+                        <td>{r.id}</td>
+                        <td>{r.reporterName ?? r.reporterUserId}</td>
+                        <td>{r.reportedUserName ?? r.reportedUserId}</td>
+                        <td className="admin-report-desc">{r.description}</td>
+                        <td>{new Date(r.createdAt).toLocaleString()}</td>
+                        <td>
+                          <button className="btn btn-ghost" onClick={() => handleDeleteReport(r.id)}>Delete</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )
+          )}
+        </section>
+
+        {showBroadcastConfirm && (
+          <div className="admin-overlay" onClick={() => setShowBroadcastConfirm(false)}>
+            <div className="admin-confirm-dialog" onClick={(e) => e.stopPropagation()}>
+              <p className="admin-confirm-text">
+                Send this message to all online devices?
+              </p>
+              <p className="admin-confirm-message">&quot;{broadcastText.trim()}&quot;</p>
+              <p className="admin-confirm-warn">This cannot be undone.</p>
+              <div className="admin-confirm-actions">
+                <button type="button" className="btn btn-ghost" onClick={() => setShowBroadcastConfirm(false)}>
+                  Cancel
+                </button>
+                <button type="button" className="btn btn-danger" onClick={handleBroadcast} disabled={broadcastSending}>
+                  {broadcastSending ? 'Sending...' : 'Confirm send'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );

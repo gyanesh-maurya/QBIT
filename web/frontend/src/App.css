@@ -643,12 +643,42 @@ body {
   border-radius: 6px;
 }
 
-/* -- Network page device count (bottom bar) -- */
-.network-device-count {
+/* -- Network page online pill: wrapper + swipe-up hint above pill -- */
+.network-online-pill-wrap {
   position: absolute;
   bottom: 16px;
   left: 50%;
   transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  z-index: 10;
+}
+
+.network-swipe-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  opacity: 0.8;
+}
+
+.network-swipe-hint-icon {
+  display: block;
+  animation: network-swipe-hint-up 2s ease-in-out infinite;
+}
+
+@keyframes network-swipe-hint-up {
+  0%, 100% { transform: translateY(0); opacity: 0.8; }
+  50% { transform: translateY(-6px); opacity: 1; }
+}
+
+/* Pill (original online bar); swipe up or tap to open Poke history overlay */
+.network-device-count {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   background: rgba(24, 24, 24, 0.75);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -659,10 +689,28 @@ body {
   font-weight: 500;
   color: var(--text-muted);
   letter-spacing: 0.04em;
-  pointer-events: none;
-  z-index: 10;
   white-space: nowrap;
   max-width: calc(100vw - 32px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: none;
+}
+
+.network-device-count:hover {
+  border-color: rgba(255, 255, 255, 0.15);
+  color: var(--text-secondary);
+}
+
+.network-device-count:focus-visible {
+  outline: 2px solid var(--red);
+  outline-offset: 2px;
+}
+
+.network-device-count-text {
+  flex-shrink: 1;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -710,10 +758,10 @@ body {
   opacity: 1;
 }
 
-/* -- GitHub repo link -- */
+/* -- Bottom-left links: Buy Me a Coffee (above), GitHub -- */
+.coffee-link,
 .github-link {
   position: fixed;
-  bottom: 16px;
   left: 16px;
   width: 38px;
   height: 38px;
@@ -732,14 +780,279 @@ body {
   z-index: 20;
 }
 
+.coffee-link {
+  bottom: 62px;
+}
+
+.github-link {
+  bottom: 16px;
+}
+
+.coffee-link:hover,
 .github-link:hover {
   background: rgba(40, 40, 40, 0.9);
   color: var(--text-primary);
   border-color: rgba(255, 255, 255, 0.2);
 }
 
+.coffee-link:active,
 .github-link:active {
   transform: scale(0.96);
+}
+
+/* -- Report floating button (same size/style as network-fab: 40px) -- */
+.report-floating-btn {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(24, 24, 24, 0.8);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  transition: bottom 0.2s ease, background 0.15s, color 0.15s, border-color 0.15s, transform 0.1s;
+  z-index: 25;
+}
+
+/* When network page has nodes, two FABs appear below (40px + 8px + 40px + 8px gap); move report up */
+.report-floating-btn-stacked {
+  bottom: 112px;
+}
+
+.report-floating-btn:hover {
+  background: rgba(40, 40, 40, 0.9);
+  color: var(--red-light);
+  border-color: var(--red);
+}
+
+.report-floating-btn:active {
+  transform: scale(0.96);
+}
+
+/* -- Poke history bottom sheet (slides up from bottom) -- */
+.poke-history-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  z-index: 100;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+
+.poke-history-overlay-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.poke-history-sheet {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  max-height: 50vh;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-radius: var(--radius) var(--radius) 0 0;
+  padding: 12px 24px 24px;
+  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.4);
+  transform: translateY(100%);
+  transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.poke-history-overlay-visible .poke-history-sheet {
+  transform: translateY(0);
+}
+
+.poke-history-sheet.has-entries {
+  max-height: 85vh;
+}
+
+.poke-history-sheet.has-entries {
+  max-height: 85vh;
+}
+
+.poke-history-sheet-handle {
+  margin: 0 0 12px;
+  padding: 14px 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  touch-action: none;
+  cursor: grab;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.poke-history-sheet-handle-bar {
+  width: 36px;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+.poke-history-sheet .poke-header {
+  margin-bottom: 16px;
+}
+
+.poke-history-sheet .poke-history-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  margin-bottom: 16px;
+}
+
+/* -- Poke history panel content (list scrolls with content length) -- */
+.poke-history-list {
+  overflow-y: auto;
+}
+
+.poke-history-list ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.poke-history-item {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.9em;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: baseline;
+}
+
+.poke-history-direction {
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.poke-history-name {
+  color: var(--text-primary);
+}
+
+.poke-history-text {
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.poke-history-time {
+  color: var(--text-muted);
+  font-size: 0.85em;
+  margin-left: auto;
+}
+
+.poke-history-empty {
+  color: var(--text-muted);
+  padding: 16px 0;
+  margin: 0;
+}
+
+.poke-history-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 12px;
+  flex-shrink: 0;
+}
+
+/* -- Report dialog -- */
+.report-dialog-desc {
+  color: var(--text-muted);
+  font-size: 0.9em;
+  margin: 0 0 16px 0;
+}
+
+.report-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.report-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.9em;
+  color: var(--text-secondary);
+}
+
+.report-textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.report-error {
+  color: var(--red-light);
+  font-size: 0.9em;
+  margin: 0;
+}
+
+.report-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 20px;
+  flex-shrink: 0;
+}
+
+.report-actions .btn {
+  flex: 1;
+  min-height: 44px;
+  padding: 10px 20px;
+  font-size: 0.85em;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-radius: 8px;
+  transition: background 0.15s, border-color 0.15s, opacity 0.15s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.report-cancel {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
+
+.report-cancel:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.report-submit {
+  background: var(--red);
+  color: #fff;
+  border: none;
+  min-width: 160px;
+  white-space: nowrap;
+}
+
+.report-submit:hover:not(:disabled) {
+  background: var(--red-light);
+}
+
+.report-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 /* -- Device count badge -- */
@@ -906,10 +1219,35 @@ body {
   margin-bottom: 2px;
 }
 
+.library-card-stats {
+  display: flex;
+  gap: 10px;
+}
+
 .library-card-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   margin-top: 10px;
+  align-items: center;
+}
+
+.btn-star-lib {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  cursor: pointer;
+  font-size: 1em;
+  line-height: 1;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.btn-star-lib:hover,
+.btn-star-lib.starred {
+  color: #f5a623;
+  border-color: rgba(245, 166, 35, 0.5);
 }
 
 .btn-download {

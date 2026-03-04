@@ -122,6 +122,20 @@ export function broadcastDevices(): void {
   broadcastCallback?.();
 }
 
+/** Send a JSON payload to all connected QBIT devices (e.g. broadcast message like poke). */
+export function broadcastToAllDevices(payload: Record<string, unknown>): void {
+  const data = JSON.stringify(payload);
+  for (const [, dev] of devices) {
+    if (dev.ws.readyState === 1) {
+      try {
+        dev.ws.send(data);
+      } catch {
+        // ignore per-device send errors
+      }
+    }
+  }
+}
+
 export function getDevice(id: string): DeviceState | undefined {
   return devices.get(id);
 }

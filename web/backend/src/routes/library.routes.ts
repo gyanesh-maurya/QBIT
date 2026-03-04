@@ -40,9 +40,12 @@ const upload = multer({
   },
 });
 
-// GET /api/library -- list all items
-router.get('/', (_req, res) => {
-  res.json(libraryService.getAll());
+// GET /api/library -- list all items (query: sort=newest|stars|downloads, default stars)
+router.get('/', (req, res) => {
+  const sort = (req.query.sort as string) || 'stars';
+  const validSort = ['newest', 'stars', 'downloads'].includes(sort) ? (sort as libraryService.LibrarySort) : 'stars';
+  const userId = req.isAuthenticated() ? (req.user as AppUser).id : undefined;
+  res.json(libraryService.getAll(validSort, userId));
 });
 
 // POST /api/library/upload -- upload a .qgif file
@@ -136,7 +139,7 @@ router.get('/:id/download', (req, res) => {
   const filePath = libraryService.getFilePath(item.id);
   if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File missing' });
 
-  // Sanitised Content-Disposition to avoid header injection
+  libraryService.incrementDownloadCount(item.id);
   res.setHeader('Content-Disposition', libraryService.contentDisposition(item.filename));
   res.setHeader('Content-Type', 'application/octet-stream');
   fs.createReadStream(filePath).pipe(res);
@@ -153,6 +156,18 @@ router.get('/:id/raw', (req, res) => {
   res.setHeader('Content-Type', 'application/octet-stream');
   res.setHeader('Cache-Control', 'public, max-age=86400');
   fs.createReadStream(filePath).pipe(res);
+});
+
+// POST /api/library/:id/star -- toggle star (auth required)
+router.post('/:id/star', (req, res) => {
+  if (!req.isAuthenticated()) {
+    return res.status(401).json({ error: 'Login required to star' });
+  }
+  const user = req.user as AppUser;
+  const item = libraryService.getById(req.params.id);
+  if (!item) return res.status(404).json({ error: 'Not found' });
+  const starred = libraryService.toggleStar(user.id, req.params.id);
+  res.json({ starred });
 });
 
 // DELETE /api/library/:id -- delete a single item (own uploads only)

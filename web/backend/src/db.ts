@@ -57,14 +57,22 @@ db.exec(`
   );
 
   CREATE TABLE IF NOT EXISTS library (
-    id         TEXT PRIMARY KEY,
-    filename   TEXT,
-    uploader   TEXT,
-    uploaderId TEXT,
-    uploadedAt TEXT,
-    size       INTEGER,
-    frameCount INTEGER
+    id            TEXT PRIMARY KEY,
+    filename      TEXT,
+    uploader      TEXT,
+    uploaderId    TEXT,
+    uploadedAt    TEXT,
+    size          INTEGER,
+    frameCount    INTEGER,
+    downloadCount INTEGER DEFAULT 0
   );
+  CREATE TABLE IF NOT EXISTS library_stars (
+    userId    TEXT NOT NULL,
+    libraryId TEXT NOT NULL,
+    PRIMARY KEY (userId, libraryId),
+    FOREIGN KEY (libraryId) REFERENCES library(id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_library_stars_libraryId ON library_stars(libraryId);
 
   CREATE TABLE IF NOT EXISTS device_records (
     deviceId   TEXT PRIMARY KEY,
@@ -75,6 +83,27 @@ db.exec(`
     lastSeen   TEXT,
     status     TEXT
   );
+`);
+
+// Migration: add downloadCount to library if missing (existing DBs)
+try {
+  db.exec('ALTER TABLE library ADD COLUMN downloadCount INTEGER DEFAULT 0');
+} catch {
+  // Column already exists
+}
+
+// Reports (user-reported accounts for admin review)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS reports (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    reporterUserId TEXT NOT NULL,
+    reporterName   TEXT,
+    reportedUserId TEXT NOT NULL,
+    reportedUserName TEXT,
+    description  TEXT NOT NULL,
+    createdAt   TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_reports_createdAt ON reports(createdAt);
 `);
 
 

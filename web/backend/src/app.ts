@@ -21,6 +21,7 @@ import { errorHandler } from './middleware/errorHandler';
 import authRoutes from './routes/auth.routes';
 import deviceRoutes from './routes/device.routes';
 import libraryRoutes from './routes/library.routes';
+import reportRoutes from './routes/report.routes';
 import healthRoutes from './routes/health.routes';
 import type { Request } from 'express';
 
@@ -94,6 +95,7 @@ app.use(csrfOriginCheck);
 
 app.use('/auth', authRoutes);
 app.use('/api', deviceRoutes);
+app.use('/api', reportRoutes);
 app.use('/api/library', libraryRoutes);
 app.use('/health', healthRoutes);
 

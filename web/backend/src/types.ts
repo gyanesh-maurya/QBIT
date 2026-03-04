@@ -84,4 +84,7 @@ export interface LibraryItem {
   uploadedAt: string;
   size: number;
   frameCount: number;
+  downloadCount: number;
+  starCount?: number;
+  starredByMe?: boolean;
 }

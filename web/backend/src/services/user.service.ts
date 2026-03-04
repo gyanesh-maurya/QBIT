@@ -7,6 +7,8 @@ import type { KnownUser, AppUser } from '../types';
 
 const stmtGet = db.prepare('SELECT * FROM users WHERE userId = ?');
 const stmtAll = db.prepare('SELECT * FROM users ORDER BY lastSeen DESC');
+
+export type UserSortKey = 'userId' | 'displayName' | 'email' | 'lastSeen';
 const stmtUpsert = db.prepare(`
   INSERT INTO users (userId, displayName, email, avatar, firstSeen, lastSeen)
   VALUES (?, ?, ?, ?, ?, ?)
@@ -43,26 +45,86 @@ export function deleteUser(userId: string): boolean {
 }
 
 export function getAllUsers(onlineUserIds: Set<string>): KnownUser[] {
-  const rows = stmtAll.all() as {
-    userId: string;
-    displayName: string;
-    email: string;
-    avatar: string;
-    firstSeen: string;
-    lastSeen: string;
-  }[];
-
+  const rows = stmtAll.all() as UserRow[];
   const now = new Date().toISOString();
-  return rows.map((u) => {
-    const isOnline = onlineUserIds.has(u.userId);
-    return {
-      userId: u.userId,
-      displayName: u.displayName,
-      email: u.email,
-      avatar: u.avatar,
-      firstSeen: u.firstSeen,
-      lastSeen: isOnline ? now : u.lastSeen,
-      status: isOnline ? 'online' as const : 'offline' as const,
-    };
+  return rows.map((u) => toKnownUser(u, onlineUserIds, now));
+}
+
+interface UserRow {
+  userId: string;
+  displayName: string;
+  email: string;
+  avatar: string;
+  firstSeen: string;
+  lastSeen: string;
+}
+
+function toKnownUser(u: UserRow, onlineUserIds: Set<string>, now: string): KnownUser {
+  const isOnline = onlineUserIds.has(u.userId);
+  return {
+    userId: u.userId,
+    displayName: u.displayName,
+    email: u.email,
+    avatar: u.avatar,
+    firstSeen: u.firstSeen,
+    lastSeen: isOnline ? now : u.lastSeen,
+    status: isOnline ? 'online' : 'offline',
+  };
+}
+
+export function getUsersPaginated(
+  onlineUserIds: Set<string>,
+  options: { q?: string; sortBy?: UserSortKey; order?: 'asc' | 'desc'; limit: number; offset: number }
+): { items: KnownUser[]; total: number } {
+  let rows = stmtAll.all() as UserRow[];
+
+  const q = (options.q ?? '').trim().toLowerCase();
+  if (q) {
+    rows = rows.filter(
+      (u) =>
+        u.userId.toLowerCase().includes(q) ||
+        (u.displayName ?? '').toLowerCase().includes(q) ||
+        (u.email ?? '').toLowerCase().includes(q)
+    );
+  }
+  const total = rows.length;
+
+  const sortBy = options.sortBy ?? 'lastSeen';
+  const order = options.order ?? 'desc';
+  rows.sort((a, b) => {
+    let va: string | number;
+    let vb: string | number;
+    switch (sortBy) {
+      case 'userId':
+        va = a.userId;
+        vb = b.userId;
+        break;
+      case 'displayName':
+        va = (a.displayName ?? '').toLowerCase();
+        vb = (b.displayName ?? '').toLowerCase();
+        break;
+      case 'email':
+        va = (a.email ?? '').toLowerCase();
+        vb = (b.email ?? '').toLowerCase();
+        break;
+      case 'lastSeen':
+      default:
+        va = new Date(a.lastSeen).getTime();
+        vb = new Date(b.lastSeen).getTime();
+        break;
+    }
+    if (typeof va === 'number' && typeof vb === 'number') {
+      return order === 'asc' ? va - vb : vb - va;
+    }
+    const r = String(va).localeCompare(String(vb));
+    return order === 'asc' ? r : -r;
   });
+
+  const limit = Math.min(Math.max(1, options.limit), 100);
+  const offset = Math.max(0, options.offset);
+  const slice = rows.slice(offset, offset + limit);
+  const now = new Date().toISOString();
+  const items = slice.map((u) => toKnownUser(u, onlineUserIds, now));
+
+  return { items, total };
 }

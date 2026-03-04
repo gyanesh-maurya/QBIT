@@ -3,7 +3,7 @@ import type { OnlineUser } from '../types';
 
 interface Props {
   target: OnlineUser;
-  onPoke: (targetUserId: string, text: string) => Promise<void>;
+  onPoke: (targetUserId: string, text: string, targetDisplayName?: string) => Promise<void>;
   onClose: () => void;
   isLoggedIn: boolean;
   apiUrl: string;
@@ -47,7 +47,7 @@ export default function UserPokeDialog({ target, onPoke, onClose, isLoggedIn, ap
     async (msg: string) => {
       if (!msg.trim() || sending) return;
       setSending(true);
-      await onPoke(target.userId, msg.trim());
+      await onPoke(target.userId, msg.trim(), target.displayName);
       setSending(false);
       onClose();
     },

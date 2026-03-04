@@ -241,6 +241,16 @@ static void wsMessage(WebsocketsClient &client, WebsocketsMessage message) {
         mqttPublishPokeEvent(sender, text);
     }
 
+    if (strcmp(msgType, "broadcast") == 0) {
+        const char *sender = doc["sender"] | "QBIT Network";
+        const char *text   = doc["text"]   | "";
+        NetworkEvent evt = {};
+        evt.kind = NetworkEvent::POKE;
+        strncpy(evt.sender, sender, sizeof(evt.sender) - 1);
+        strncpy(evt.text, text, sizeof(evt.text) - 1);
+        xQueueSend(networkEventQueue, &evt, pdMS_TO_TICKS(100));
+    }
+
     if (strcmp(msgType, "claim_request") == 0) {
         const char *userName = doc["userName"] | "Unknown";
         NetworkEvent evt = {};
