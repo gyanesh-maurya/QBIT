@@ -9,9 +9,11 @@ import path from 'path';
 import archiver from 'archiver';
 import rateLimit from 'express-rate-limit';
 import { validate } from '../middleware/validate';
+import { requireNotBanned } from '../middleware/requireNotBanned';
 import { libraryBatchSchema } from '../schemas';
 import { LIBRARY_RATE_LIMIT, MAX_QGIF_SIZE } from '../config';
 import * as libraryService from '../services/library.service';
+import { ensurePublicUserId } from '../services/publicUserId.service';
 import logger from '../logger';
 import type { AppUser } from '../types';
 
@@ -40,16 +42,19 @@ const upload = multer({
   },
 });
 
-// GET /api/library -- list all items (query: sort=newest|stars|downloads, default stars)
+// GET /api/library -- list all items (query: sort=newest|stars|downloads, default stars); expose uploaderPublicId only
 router.get('/', (req, res) => {
   const sort = (req.query.sort as string) || 'stars';
   const validSort = ['newest', 'stars', 'downloads'].includes(sort) ? (sort as libraryService.LibrarySort) : 'stars';
   const userId = req.isAuthenticated() ? (req.user as AppUser).id : undefined;
-  res.json(libraryService.getAll(validSort, userId));
+  const items = libraryService.getAll(validSort, userId);
+  res.json(
+    items.map(({ uploaderId, ...rest }) => ({ ...rest, uploaderPublicId: ensurePublicUserId(uploaderId) }))
+  );
 });
 
 // POST /api/library/upload -- upload a .qgif file
-router.post('/upload', (req, res) => {
+router.post('/upload', requireNotBanned, (req, res) => {
   if (!req.isAuthenticated()) {
     return res.status(401).json({ error: 'Login required to upload' });
   }
@@ -85,12 +90,13 @@ router.post('/upload', (req, res) => {
 
     const user = req.user as AppUser;
     const item = libraryService.addItem(buf, req.file.originalname, user.displayName || 'Unknown', user.id, frameCount);
-    res.json(item);
+    const { uploaderId, ...rest } = item;
+    res.json({ ...rest, uploaderPublicId: ensurePublicUserId(uploaderId) });
   });
 });
 
 // DELETE /api/library/batch -- batch delete (must be before /:id to avoid matching "batch")
-router.delete('/batch', validate(libraryBatchSchema), (req, res) => {
+router.delete('/batch', requireNotBanned, validate(libraryBatchSchema), (req, res) => {
   if (!req.isAuthenticated()) {
     return res.status(401).json({ error: 'Login required' });
   }
@@ -133,7 +139,8 @@ router.post('/batch-download', validate(libraryBatchSchema), (req, res) => {
 
 // GET /api/library/:id/download -- download with Content-Disposition
 router.get('/:id/download', (req, res) => {
-  const item = libraryService.getById(req.params.id);
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const item = libraryService.getById(id);
   if (!item) return res.status(404).json({ error: 'Not found' });
 
   const filePath = libraryService.getFilePath(item.id);
@@ -147,7 +154,8 @@ router.get('/:id/download', (req, res) => {
 
 // GET /api/library/:id/raw -- raw bytes for canvas renderer
 router.get('/:id/raw', (req, res) => {
-  const item = libraryService.getById(req.params.id);
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const item = libraryService.getById(id);
   if (!item) return res.status(404).json({ error: 'Not found' });
 
   const filePath = libraryService.getFilePath(item.id);
@@ -159,32 +167,34 @@ router.get('/:id/raw', (req, res) => {
 });
 
 // POST /api/library/:id/star -- toggle star (auth required)
-router.post('/:id/star', (req, res) => {
+router.post('/:id/star', requireNotBanned, (req, res) => {
   if (!req.isAuthenticated()) {
     return res.status(401).json({ error: 'Login required to star' });
   }
   const user = req.user as AppUser;
-  const item = libraryService.getById(req.params.id);
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const item = libraryService.getById(id);
   if (!item) return res.status(404).json({ error: 'Not found' });
-  const starred = libraryService.toggleStar(user.id, req.params.id);
+  const starred = libraryService.toggleStar(user.id, id);
   res.json({ starred });
 });
 
 // DELETE /api/library/:id -- delete a single item (own uploads only)
-router.delete('/:id', (req, res) => {
+router.delete('/:id', requireNotBanned, (req, res) => {
   if (!req.isAuthenticated()) {
     return res.status(401).json({ error: 'Login required' });
   }
 
   const user = req.user as AppUser;
-  const item = libraryService.getById(req.params.id);
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const item = libraryService.getById(id);
   if (!item) return res.status(404).json({ error: 'Not found' });
 
   if (item.uploaderId !== user.id) {
     return res.status(403).json({ error: 'You can only delete your own uploads' });
   }
 
-  libraryService.deleteItem(req.params.id);
+  libraryService.deleteItem(id);
   res.json({ ok: true });
 });
 

@@ -21,6 +21,7 @@ enum DisplayState {
     GIF_PLAYBACK,
     POKE_DISPLAY,
     CLAIM_PROMPT,
+    FRIEND_PROMPT,
     HISTORY_TIME,
     HISTORY_POKE,
     MUTE_FEEDBACK,
@@ -46,11 +47,12 @@ struct GestureEvent {
 // ==========================================================================
 //  Network events (network task → display task)
 // ==========================================================================
-struct NetworkEvent {
+    struct NetworkEvent {
     enum Kind {
         POKE,
         POKE_BITMAP,
         CLAIM_REQUEST,
+        FRIEND_REQUEST,
         WIFI_STATUS,
         WS_STATUS,
         MQTT_COMMAND

@@ -9,7 +9,7 @@ interface Props {
 }
 
 export default function ReportDialog({ onlineUsers, apiUrl, onClose, onSubmitted }: Props) {
-  const [reportedUserId, setReportedUserId] = useState('');
+  const [reportedPublicUserId, setReportedPublicUserId] = useState('');
   const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -17,7 +17,7 @@ export default function ReportDialog({ onlineUsers, apiUrl, onClose, onSubmitted
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault();
-      const uid = reportedUserId.trim();
+      const uid = reportedPublicUserId.trim();
       const desc = description.trim();
       if (!uid || !desc) {
         setError('Please select a user and enter a short description.');
@@ -34,7 +34,7 @@ export default function ReportDialog({ onlineUsers, apiUrl, onClose, onSubmitted
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ reportedUserId: uid, description: desc }),
+          body: JSON.stringify({ reportedPublicUserId: uid, description: desc }),
         });
         if (res.ok) {
           onSubmitted();
@@ -49,7 +49,7 @@ export default function ReportDialog({ onlineUsers, apiUrl, onClose, onSubmitted
         setSubmitting(false);
       }
     },
-    [reportedUserId, description, apiUrl, onClose, onSubmitted]
+    [reportedPublicUserId, description, apiUrl, onClose, onSubmitted]
   );
 
   return (
@@ -68,15 +68,15 @@ export default function ReportDialog({ onlineUsers, apiUrl, onClose, onSubmitted
           <label className="report-label">
             User to report
             <select
-              value={reportedUserId}
-              onChange={(e) => setReportedUserId(e.target.value)}
+              value={reportedPublicUserId}
+              onChange={(e) => setReportedPublicUserId(e.target.value)}
               className="poke-input"
               required
             >
               <option value="">Select online user...</option>
               {onlineUsers.map((u) => (
-                <option key={u.userId} value={u.userId}>
-                  {u.displayName} ({u.userId})
+                <option key={u.publicUserId} value={u.publicUserId}>
+                  {u.displayName}
                 </option>
               ))}
             </select>

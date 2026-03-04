@@ -106,6 +106,33 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_reports_createdAt ON reports(createdAt);
 `);
 
+// Friends (symmetric: store both (a,b) and (b,a) for easy lookup)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS friends (
+    userId   TEXT NOT NULL,
+    friendId TEXT NOT NULL,
+    PRIMARY KEY (userId, friendId)
+  );
+  CREATE INDEX IF NOT EXISTS idx_friends_userId ON friends(userId);
+`);
+
+// User settings (e.g. only friends can poke my QBIT)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS user_settings (
+    userId TEXT PRIMARY KEY,
+    onlyFriendsCanPoke INTEGER NOT NULL DEFAULT 0
+  );
+`);
+
+// Opaque public user id (cannot reverse to Google userId); used in device list, friends API, poke target
+db.exec(`
+  CREATE TABLE IF NOT EXISTS user_public_ids (
+    userId TEXT PRIMARY KEY,
+    publicId TEXT NOT NULL UNIQUE
+  );
+  CREATE INDEX IF NOT EXISTS idx_user_public_ids_publicId ON user_public_ids(publicId);
+`);
+
 
 
 // ---------------------------------------------------------------------------

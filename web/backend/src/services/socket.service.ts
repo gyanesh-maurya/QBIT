@@ -9,6 +9,7 @@ import { FRONTEND_URL } from '../config';
 import { isBanned } from './ban.service';
 import * as userService from './user.service';
 import * as deviceService from './device.service';
+import { ensurePublicUserId } from './publicUserId.service';
 import logger from '../logger';
 import type { AppUser, OnlineUser, OnlineUserPublic } from '../types';
 import type { RequestHandler } from 'express';
@@ -37,7 +38,7 @@ export function getOnlineUsersList(): OnlineUserPublic[] {
       existing.socketIds.push(u.socketId);
     } else {
       byUserId.set(u.userId, {
-        userId: u.userId,
+        publicUserId: ensurePublicUserId(u.userId),
         displayName: u.displayName,
         avatar: u.avatar || undefined,
         connectedAt: u.connectedAt.toISOString(),
@@ -113,6 +114,17 @@ export function disconnectUserSocketsByIp(ip: string): number {
 
 export function getIo(): SocketIOServer {
   return io;
+}
+
+/** Emit an event to all sockets belonging to a user (by userId). */
+export function emitToUser(userId: string, event: string, data?: unknown): void {
+  if (!io) return;
+  for (const [sid, u] of onlineUsers.entries()) {
+    if (u.userId === userId) {
+      const s = io.sockets.sockets.get(sid);
+      if (s) s.emit(event, data);
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------

@@ -6,20 +6,25 @@ export interface Device {
   version: string;
   connectedAt: string;
   claimedBy?: {
+    publicUserId: string;
     userName: string;
     userAvatar: string;
   } | null;
 }
 
+export interface UserSettings {
+  onlyFriendsCanPoke: boolean;
+}
+
 export interface User {
-  id: string;
+  publicUserId: string;
   displayName: string;
   email: string;
   avatar: string;
 }
 
 export interface OnlineUser {
-  userId: string;
+  publicUserId: string;
   displayName: string;
   avatar?: string;
   connectedAt: string;

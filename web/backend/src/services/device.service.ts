@@ -8,9 +8,12 @@ import { Server as HttpServer } from 'http';
 import { DEVICE_API_KEY, MAX_DEVICE_CONNECTIONS } from '../config';
 import { isBannedDevice, isBanned } from './ban.service';
 import * as claimService from './claim.service';
+import * as friendService from './friend.service';
+import * as socketService from './socket.service';
+import { ensurePublicUserId } from './publicUserId.service';
 import db from '../db';
 import logger from '../logger';
-import type { DeviceState, PendingClaim, ClaimInfo } from '../types';
+import type { DeviceState, PendingClaim, PendingFriendRequest, ClaimInfo } from '../types';
 
 // Device records (persisted for admin: online + offline)
 const stmtRecordUpsert = db.prepare(
@@ -28,6 +31,7 @@ const stmtRecordDelete = db.prepare('DELETE FROM device_records WHERE deviceId =
 
 const devices = new Map<string, DeviceState>();
 const pendingClaims = new Map<string, PendingClaim>();
+const pendingFriendRequests = new Map<string, PendingFriendRequest>();
 
 // Throttle ban-rejection log to avoid log flood
 const bannedDeviceLogLast = new Map<string, number>();
@@ -54,7 +58,9 @@ export function getDeviceList() {
       publicIp: d.publicIp,
       version: d.version,
       connectedAt: d.connectedAt.toISOString(),
-      claimedBy: claim ? { userName: claim.userName, userAvatar: claim.userAvatar } : null,
+      claimedBy: claim
+        ? { publicUserId: ensurePublicUserId(claim.userId), userName: claim.userName, userAvatar: claim.userAvatar }
+        : null,
     };
   });
 }
@@ -193,6 +199,33 @@ export function clearPendingClaim(deviceId: string): void {
     clearTimeout(pending.timer);
     pendingClaims.delete(deviceId);
   }
+}
+
+// ---------------------------------------------------------------------------
+//  Pending friend requests (device owner confirms on device)
+// ---------------------------------------------------------------------------
+
+export function getPendingFriendRequest(deviceId: string): PendingFriendRequest | undefined {
+  return pendingFriendRequests.get(deviceId);
+}
+
+export function hasPendingFriendRequest(deviceId: string): boolean {
+  return pendingFriendRequests.has(deviceId);
+}
+
+export function setPendingFriendRequest(deviceId: string, request: PendingFriendRequest): void {
+  pendingFriendRequests.set(deviceId, request);
+}
+
+/** Returns the pending request if one was cleared, so caller can notify requester. */
+export function clearPendingFriendRequest(deviceId: string): PendingFriendRequest | undefined {
+  const pending = pendingFriendRequests.get(deviceId);
+  if (pending) {
+    clearTimeout(pending.timer);
+    pendingFriendRequests.delete(deviceId);
+    return pending;
+  }
+  return undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -341,6 +374,43 @@ export function setupWebSocketServer(httpServer: HttpServer): WebSocketServer {
             clearTimeout(pending.timer);
             pendingClaims.delete(deviceId);
             logger.info({ deviceId, userName: pending.userName }, 'Device claim rejected');
+          }
+        }
+
+        if (msg.type === 'friend_confirm' && deviceId) {
+          const pending = pendingFriendRequests.get(deviceId);
+          if (pending) {
+            const claim = claimService.getClaimByDevice(deviceId);
+            if (claim?.userId !== pending.ownerUserId) {
+              clearPendingFriendRequest(deviceId);
+              logger.warn(
+                { deviceId, pendingOwner: pending.ownerUserId, currentOwner: claim?.userId },
+                'Friend confirm ignored: device owner changed since request'
+              );
+              socketService.emitToUser(pending.requesterUserId, 'friend_request:result', { result: 'cancelled' });
+            } else {
+              clearTimeout(pending.timer);
+              pendingFriendRequests.delete(deviceId);
+              friendService.addFriend(pending.ownerUserId, pending.requesterUserId);
+              broadcastDevices();
+              socketService.emitToUser(pending.ownerUserId, 'friends:update');
+              socketService.emitToUser(pending.requesterUserId, 'friends:update');
+              socketService.emitToUser(pending.requesterUserId, 'friend_request:result', { result: 'accepted' });
+              logger.info(
+                { deviceId, owner: pending.ownerUserId, friend: pending.requesterUserId },
+                'Friend added via device confirm'
+              );
+            }
+          }
+        }
+
+        if (msg.type === 'friend_reject' && deviceId) {
+          const pending = pendingFriendRequests.get(deviceId);
+          if (pending) {
+            clearTimeout(pending.timer);
+            pendingFriendRequests.delete(deviceId);
+            socketService.emitToUser(pending.requesterUserId, 'friend_request:result', { result: 'rejected' });
+            logger.info({ deviceId, requester: pending.requesterUserId }, 'Friend request rejected');
           }
         }
       } catch (e) {

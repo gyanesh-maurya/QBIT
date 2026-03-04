@@ -69,7 +69,7 @@ interface LibraryItem {
   id: string;
   filename: string;
   uploader: string;
-  uploaderId: string;
+  uploaderPublicId: string;
   uploadedAt: string;
   size: number;
   frameCount: number;
@@ -392,7 +392,7 @@ export default function LibraryPage({ user, apiUrl }: Props) {
   // Count how many selected items are owned by current user
   const ownedSelectedCount = useMemo(() => {
     if (!user) return 0;
-    return items.filter((i) => selectedIds.has(i.id) && i.uploaderId === user.id).length;
+    return items.filter((i) => selectedIds.has(i.id) && i.uploaderPublicId === user.publicUserId).length;
   }, [items, selectedIds, user]);
 
   return (
@@ -600,7 +600,7 @@ export default function LibraryPage({ user, apiUrl }: Props) {
                     >
                       Download
                     </a>
-                    {user && user.id === item.uploaderId && (
+                    {user && user.publicUserId === item.uploaderPublicId && (
                       <button
                         className="btn-delete-lib"
                         onClick={() => handleDelete(item.id, item.filename)}

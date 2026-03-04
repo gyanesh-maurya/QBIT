@@ -7,9 +7,13 @@ interface Props {
   onPoke: (targetId: string, text: string, bitmapData?: BitmapPayload) => void;
   onClaim: (device: Device) => void;
   onUnclaim: (device: Device) => void;
+  onAddFriend: (device: Device) => void;
   onClose: () => void;
   isLoggedIn: boolean;
   apiUrl: string;
+  friendIds?: string[];
+  onlyFriendsCanPoke?: boolean;
+  onOnlyFriendsCanPokeChange?: (value: boolean) => void;
 }
 
 export interface BitmapPayload {
@@ -99,10 +103,18 @@ export default function PokeDialog({
   onPoke,
   onClaim,
   onUnclaim,
+  onAddFriend,
   onClose,
   isLoggedIn,
   apiUrl,
+  friendIds = [],
+  onlyFriendsCanPoke = false,
+  onOnlyFriendsCanPokeChange,
 }: Props) {
+  const isMyDevice = !!user && !!device.claimedBy?.publicUserId && device.claimedBy.publicUserId === user.publicUserId;
+  const isOthersClaimedDevice = !!device.claimedBy && !isMyDevice;
+  const isFriendWithOwner = isOthersClaimedDevice && device.claimedBy?.publicUserId && friendIds.includes(device.claimedBy.publicUserId);
+  const showAddFriend = isOthersClaimedDevice && user && !isFriendWithOwner;
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
 
@@ -199,14 +211,35 @@ export default function PokeDialog({
               {sending ? 'Sending...' : 'Send Poke'}
             </button>
 
-            {device.claimedBy ? (
+            {isMyDevice && (
+              <>
+                {onOnlyFriendsCanPokeChange != null && (
+                  <label className="poke-setting-toggle">
+                    <input
+                      type="checkbox"
+                      checked={onlyFriendsCanPoke}
+                      onChange={(e) => onOnlyFriendsCanPokeChange(e.target.checked)}
+                    />
+                    <span>Only friends can poke this QBIT</span>
+                  </label>
+                )}
+                <button
+                  className="btn-claim-link unclaim"
+                  onClick={() => onUnclaim(device)}
+                >
+                  Unclaim this device
+                </button>
+              </>
+            )}
+            {showAddFriend && (
               <button
-                className="btn-claim-link unclaim"
-                onClick={() => onUnclaim(device)}
+                className="btn-claim-link"
+                onClick={() => onAddFriend(device)}
               >
-                Unclaim this device
+                Add friend
               </button>
-            ) : (
+            )}
+            {!device.claimedBy && (
               <button
                 className="btn-claim-link"
                 onClick={() => onClaim(device)}

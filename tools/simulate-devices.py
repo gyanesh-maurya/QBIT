@@ -74,6 +74,17 @@ def handle_message(ws, device_id, device_name, msg_data, auto_claim, device_inde
         else:
             print(" (ignored, use --auto-claim to accept)")
 
+    elif msg_type == "friend_request":
+        user_name = msg.get("userName", "Unknown")
+        print(f"  [?] {device_name}  friend request from {user_name}", end="")
+        if auto_claim:
+            print(" -> auto-confirming in 2s...")
+            time.sleep(2)
+            ws.send(json.dumps({"type": "friend_confirm"}))
+            print(f"  [v] {device_name}  friend added: {user_name}")
+        else:
+            print(" (ignored, use --auto-claim to accept)")
+
 
 def device_thread(index, url, stop_event, auto_claim, api_key):
     """Run a single simulated device connection."""

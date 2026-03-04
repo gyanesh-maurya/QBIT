@@ -14,9 +14,9 @@ export const pokeSchema = z.object({
   textBitmapWidth: z.number().int().positive().optional(),
 });
 
-// POST /api/poke/user
+// POST /api/poke/user (targetPublicUserId: opaque id, not raw Google id)
 export const pokeUserSchema = z.object({
-  targetUserId: z.string().min(1).max(256).regex(/^[a-zA-Z0-9@._+-]+$/),
+  targetPublicUserId: z.string().length(24).regex(/^[a-f0-9]+$/),
   text: z.string().min(1).max(25),
 });
 
@@ -24,6 +24,17 @@ export const pokeUserSchema = z.object({
 export const claimSchema = z.object({
   targetId: z.string().min(1).max(128).regex(/^[a-zA-Z0-9-]+$/),
   deviceIdFull: z.string().min(1).max(256).regex(/^[a-zA-Z0-9:]+$/),
+});
+
+// POST /api/friends/request (same body as claim: target device id + deviceIdFull to confirm)
+export const friendRequestSchema = z.object({
+  targetId: z.string().min(1).max(128).regex(/^[a-zA-Z0-9-]+$/),
+  deviceIdFull: z.string().min(1).max(256).regex(/^[a-zA-Z0-9:]+$/),
+});
+
+// PATCH /api/me/settings
+export const meSettingsSchema = z.object({
+  onlyFriendsCanPoke: z.boolean(),
 });
 
 // DELETE /api/library/batch  &  POST /api/library/batch-download
@@ -53,15 +64,20 @@ export const adminDevicesDeleteSchema = z.object({
   deviceIds: z.array(z.string().min(1).max(128).regex(/^[a-zA-Z0-9-]+$/)).min(1).max(100),
 });
 
-// POST /api/report (user report for harassment etc.)
+// POST /api/report (reportedPublicUserId: opaque id)
 export const reportSchema = z.object({
-  reportedUserId: z.string().min(1).max(256).regex(/^[a-zA-Z0-9@._+-]+$/),
+  reportedPublicUserId: z.string().length(24).regex(/^[a-f0-9]+$/),
   description: z.string().max(500).transform((s) => s.trim()).pipe(z.string().min(1)),
 });
 
 // POST /api/admin/broadcast
 export const adminBroadcastSchema = z.object({
   text: z.string().min(1).max(100),
+});
+
+// DELETE /api/friends/:userId (param value is publicUserId, opaque hex)
+export const friendUserIdParamSchema = z.object({
+  userId: z.string().length(24).regex(/^[a-f0-9]+$/),
 });
 
 // Admin path params (validate to avoid malformed IDs)

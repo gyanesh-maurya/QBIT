@@ -140,6 +140,26 @@ void networkSendClaimReject() {
     Serial.println("Claim rejected (timeout)");
 }
 
+void networkSendFriendConfirm() {
+    if (!_wsConnected) return;
+    StaticJsonDocument<64> doc;
+    doc["type"] = "friend_confirm";
+    String msg;
+    serializeJson(doc, msg);
+    _wsClient.send(msg);
+    Serial.println("Friend confirmed");
+}
+
+void networkSendFriendReject() {
+    if (!_wsConnected) return;
+    StaticJsonDocument<64> doc;
+    doc["type"] = "friend_reject";
+    String msg;
+    serializeJson(doc, msg);
+    _wsClient.send(msg);
+    Serial.println("Friend request rejected (timeout)");
+}
+
 // ==========================================================================
 //  WebSocket event + message handlers
 // ==========================================================================
@@ -255,6 +275,14 @@ static void wsMessage(WebsocketsClient &client, WebsocketsMessage message) {
         const char *userName = doc["userName"] | "Unknown";
         NetworkEvent evt = {};
         evt.kind = NetworkEvent::CLAIM_REQUEST;
+        strncpy(evt.sender, userName, sizeof(evt.sender) - 1);
+        xQueueSend(networkEventQueue, &evt, pdMS_TO_TICKS(100));
+    }
+
+    if (strcmp(msgType, "friend_request") == 0) {
+        const char *userName = doc["userName"] | "Unknown";
+        NetworkEvent evt = {};
+        evt.kind = NetworkEvent::FRIEND_REQUEST;
         strncpy(evt.sender, userName, sizeof(evt.sender) - 1);
         xQueueSend(networkEventQueue, &evt, pdMS_TO_TICKS(100));
     }

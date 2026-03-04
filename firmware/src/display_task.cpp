@@ -258,7 +258,7 @@ void displayTask(void *param) {
         if (xQueueReceive(networkEventQueue, &netEvt, 0) == pdTRUE) {
             switch (netEvt.kind) {
                 case NetworkEvent::POKE:
-                    if (_state != CLAIM_PROMPT && _state != MUTE_FEEDBACK) {
+                    if (_state != CLAIM_PROMPT && _state != FRIEND_PROMPT && _state != MUTE_FEEDBACK) {
                         // Avoid overwriting custom poke text with generic "Poke!" (e.g. from HA button when text entity was used)
                         const char *cur = pokeGetCurrentMessage();
                         if (cur && _state == POKE_DISPLAY && strcmp(netEvt.text, "Poke!") == 0 && strcmp(cur, "Poke!") != 0) {
@@ -274,7 +274,7 @@ void displayTask(void *param) {
                     break;
 
                 case NetworkEvent::POKE_BITMAP:
-                    if (_state != CLAIM_PROMPT && _state != MUTE_FEEDBACK) {
+                    if (_state != CLAIM_PROMPT && _state != FRIEND_PROMPT && _state != MUTE_FEEDBACK) {
                         handlePokeBitmapFromPtrs(
                             netEvt.sender, netEvt.text,
                             netEvt.senderBmp, netEvt.senderBmpWidth, netEvt.senderBmpLen,
@@ -295,6 +295,15 @@ void displayTask(void *param) {
                 case NetworkEvent::CLAIM_REQUEST:
                     enterState(CLAIM_PROMPT);
                     showText("[ Claim Request ]", "", netEvt.sender, "Hold to confirm");
+                    if (getBuzzerVolume() > 0) {
+                        noTone(getPinBuzzer());
+                        rtttl::begin(getPinBuzzer(), CLAIM_MELODY);
+                    }
+                    break;
+
+                case NetworkEvent::FRIEND_REQUEST:
+                    enterState(FRIEND_PROMPT);
+                    showText("[ Friend Request ]", "", netEvt.sender, "Hold to confirm");
                     if (getBuzzerVolume() > 0) {
                         noTone(getPinBuzzer());
                         rtttl::begin(getPinBuzzer(), CLAIM_MELODY);
@@ -441,6 +450,15 @@ void displayTask(void *param) {
                     }
                     break;
 
+                case FRIEND_PROMPT:
+                    if (gesture.type == LONG_PRESS) {
+                        networkSendFriendConfirm();
+                        showText("[ Friend added! ]", "", "You're friends now.", "");
+                        vTaskDelay(pdMS_TO_TICKS(2000));
+                        enterState(GIF_PLAYBACK);
+                    }
+                    break;
+
                 case HISTORY_TIME:
                     _stateEntryMs = now;  // reset idle timer
                     if (gesture.type == SINGLE_TAP) {
@@ -570,6 +588,15 @@ void displayTask(void *param) {
                 if (elapsed > CLAIM_TIMEOUT_MS) {
                     networkSendClaimReject();
                     showText("[ Claim Timeout ]", "", "Request expired.", "");
+                    vTaskDelay(pdMS_TO_TICKS(1500));
+                    enterState(GIF_PLAYBACK);
+                }
+                break;
+
+            case FRIEND_PROMPT:
+                if (elapsed > CLAIM_TIMEOUT_MS) {
+                    networkSendFriendReject();
+                    showText("[ Friend Timeout ]", "", "Request expired.", "");
                     vTaskDelay(pdMS_TO_TICKS(1500));
                     enterState(GIF_PLAYBACK);
                 }

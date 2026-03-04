@@ -38,6 +38,14 @@ export interface PendingClaim {
   timer: ReturnType<typeof setTimeout>;
 }
 
+export interface PendingFriendRequest {
+  ownerUserId: string;
+  requesterUserId: string;
+  requesterName: string;
+  requesterAvatar: string;
+  timer: ReturnType<typeof setTimeout>;
+}
+
 // ---- Bans ----
 export interface BannedList {
   userIds: string[];
@@ -68,7 +76,7 @@ export interface OnlineUser {
 }
 
 export interface OnlineUserPublic {
-  userId: string;
+  publicUserId: string;
   displayName: string;
   avatar?: string;
   connectedAt: string;

@@ -199,6 +199,10 @@ router.delete('/claim/:deviceId', adminAuth, validateParams(adminDeviceIdParamSc
   const claim = claimService.getClaimByDevice(deviceId);
   if (!claim) return res.status(404).json({ error: 'No claim found for this device' });
   claimService.removeClaim(deviceId);
+  const pendingFriend = deviceService.clearPendingFriendRequest(deviceId);
+  if (pendingFriend) {
+    socketService.emitToUser(pendingFriend.requesterUserId, 'friend_request:result', { result: 'cancelled' });
+  }
   deviceService.broadcastDevices();
   logger.info({ deviceId }, 'Claim removed by admin');
   res.json({ ok: true });

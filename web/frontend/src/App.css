@@ -604,6 +604,24 @@ body {
   color: #fff;
 }
 
+.poke-setting-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  font-size: 0.9em;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.poke-setting-toggle input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--red);
+}
+.poke-setting-toggle span {
+  user-select: none;
+}
+
 /* -- Claim dialog -- */
 .claim-description {
   color: var(--text-muted);

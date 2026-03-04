@@ -15,6 +15,10 @@ void networkSendDeviceInfo();
 void networkSendClaimConfirm();
 void networkSendClaimReject();
 
+// Send friend confirm/reject to backend WebSocket.
+void networkSendFriendConfirm();
+void networkSendFriendReject();
+
 // Time when WiFi was declared lost (0 if connected or not yet lost). Used for AP countdown.
 unsigned long networkGetWifiLostMs();
 

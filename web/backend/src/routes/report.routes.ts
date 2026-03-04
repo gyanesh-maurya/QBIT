@@ -4,21 +4,27 @@
 
 import { Router } from 'express';
 import { validate } from '../middleware/validate';
+import { requireNotBanned } from '../middleware/requireNotBanned';
 import { reportSchema } from '../schemas';
 import * as reportService from '../services/report.service';
 import * as userService from '../services/user.service';
+import { getUserIdFromPublicId } from '../services/publicUserId.service';
 import logger from '../logger';
 import type { AppUser } from '../types';
 
 const router = Router();
 
-// POST /api/report -- submit a report (logged-in user reports another user)
-router.post('/report', validate(reportSchema), (req, res) => {
+// POST /api/report -- submit a report (logged-in user reports another user by publicUserId)
+router.post('/report', requireNotBanned, validate(reportSchema), (req, res) => {
   if (!req.isAuthenticated()) {
     return res.status(401).json({ error: 'Login required to report' });
   }
   const reporter = req.user as AppUser;
-  const { reportedUserId, description } = req.body as { reportedUserId: string; description: string };
+  const { reportedPublicUserId, description } = req.body as { reportedPublicUserId: string; description: string };
+  const reportedUserId = getUserIdFromPublicId(reportedPublicUserId);
+  if (!reportedUserId) {
+    return res.status(400).json({ error: 'Reported user not found' });
+  }
   if (reporter.id === reportedUserId) {
     return res.status(400).json({ error: 'Cannot report yourself' });
   }

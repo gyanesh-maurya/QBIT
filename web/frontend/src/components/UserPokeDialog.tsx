@@ -47,11 +47,11 @@ export default function UserPokeDialog({ target, onPoke, onClose, isLoggedIn, ap
     async (msg: string) => {
       if (!msg.trim() || sending) return;
       setSending(true);
-      await onPoke(target.userId, msg.trim(), target.displayName);
+      await onPoke(target.publicUserId, msg.trim(), target.displayName);
       setSending(false);
       onClose();
     },
-    [sending, target.userId, onPoke, onClose]
+    [sending, target.publicUserId, onPoke, onClose]
   );
 
   return (

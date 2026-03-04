@@ -6,6 +6,7 @@ import PokeDialog from './components/PokeDialog';
 import type { BitmapPayload } from './components/PokeDialog';
 import UserPokeDialog from './components/UserPokeDialog';
 import ClaimDialog from './components/ClaimDialog';
+import AddFriendDialog from './components/AddFriendDialog';
 import FlashPage from './components/FlashPage';
 import LibraryPage from './components/LibraryPage';
 import PokeHistoryPanel from './components/PokeHistoryPanel';
@@ -33,12 +34,16 @@ export default function App() {
   const [selectedDevice, setSelectedDevice] = useState<Device | null>(null);
   const [selectedUser, setSelectedUser] = useState<OnlineUser | null>(null);
   const [claimDevice, setClaimDevice] = useState<Device | null>(null);
+  const [addFriendDevice, setAddFriendDevice] = useState<Device | null>(null);
+  const [friendIds, setFriendIds] = useState<string[]>([]);
+  const [onlyFriendsCanPoke, setOnlyFriendsCanPoke] = useState(false);
   const [notifications, setNotifications] = useState<PokeNotification[]>([]);
   const [showPokeHistory, setShowPokeHistory] = useState(false);
   const [pokeHistoryEntries, setPokeHistoryEntries] = useState<PokeHistoryEntry[]>([]);
   const [showReport, setShowReport] = useState(false);
   const notificationIdRef = useRef(0);
   const socketRef = useRef<Socket | null>(null);
+  const fetchFriendsRef = useRef<() => void>(() => {});
   const networkBarTouchStartRef = useRef<number | null>(null);
   const networkBarMouseStartRef = useRef<number | null>(null);
   const pillOpenedByMouseDragRef = useRef(false);
@@ -89,6 +94,34 @@ export default function App() {
       .catch(() => setUser(null));
   }, []);
 
+  // Fetch friends and settings when user is set
+  const fetchFriends = useCallback(() => {
+    if (!user) {
+      setFriendIds([]);
+      return;
+    }
+    fetch(`${API_URL}/api/friends`, { credentials: 'include' })
+      .then((r) => (r.ok ? r.json() : { friendIds: [] }))
+      .then((data) => setFriendIds(data.friendIds || []))
+      .catch(() => setFriendIds([]));
+  }, [user]);
+  const fetchSettings = useCallback(() => {
+    if (!user) {
+      setOnlyFriendsCanPoke(false);
+      return;
+    }
+    fetch(`${API_URL}/api/me/settings`, { credentials: 'include' })
+      .then((r) => (r.ok ? r.json() : { onlyFriendsCanPoke: false }))
+      .then((data) => setOnlyFriendsCanPoke(!!data.onlyFriendsCanPoke))
+      .catch(() => setOnlyFriendsCanPoke(false));
+  }, [user]);
+  useEffect(() => {
+    fetchFriends();
+    fetchSettings();
+  }, [fetchFriends, fetchSettings]);
+
+  fetchFriendsRef.current = fetchFriends;
+
   // Socket.io connection for real-time device and user updates
   useEffect(() => {
     const s = io(API_URL || window.location.origin, {
@@ -101,6 +134,33 @@ export default function App() {
 
     s.on('users:update', (data: OnlineUser[]) => {
       setOnlineUsers(data);
+    });
+
+    s.on('friends:update', () => {
+      setAddFriendDevice(null);
+      fetchFriendsRef.current();
+    });
+
+    s.on('friend_request:result', (data: { result: string }) => {
+      setAddFriendDevice(null);
+      if (data.result === 'rejected' || data.result === 'timeout' || data.result === 'cancelled') {
+        const id = ++notificationIdRef.current;
+        const text = data.result === 'rejected'
+          ? 'Friend request was declined.'
+          : data.result === 'timeout'
+            ? 'Friend request timed out.'
+            : 'Friend request was cancelled.';
+        setNotifications((prev) => {
+          const next = [...prev, { id, from: 'QBIT', text, exiting: false }];
+          return next.slice(-3);
+        });
+        setTimeout(() => {
+          setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, exiting: true } : n)));
+          setTimeout(() => {
+            setNotifications((prev) => prev.filter((n) => n.id !== id));
+          }, 300);
+        }, 5000);
+      }
     });
 
     s.on('poke', (data: { from: string; text: string }) => {
@@ -194,15 +254,15 @@ export default function App() {
     setSelectedUser(onlineUser);
   }, []);
 
-  // Send poke to an online user
+  // Send poke to an online user (target by publicUserId)
   const handleUserPoke = useCallback(
-    async (targetUserId: string, text: string, targetDisplayName?: string) => {
+    async (targetPublicUserId: string, text: string, targetDisplayName?: string) => {
       try {
         const res = await fetch(`${API_URL}/api/poke/user`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
-          body: JSON.stringify({ targetUserId, text }),
+          body: JSON.stringify({ targetPublicUserId, text }),
         });
         if (!res.ok) {
           const data = await res.json();
@@ -210,7 +270,7 @@ export default function App() {
           return;
         }
         addPokeHistory({
-          fromUserId: targetUserId,
+          fromUserId: targetPublicUserId,
           fromName: targetDisplayName ?? 'User',
           direction: 'sent',
           text,
@@ -249,7 +309,8 @@ export default function App() {
               <NetworkGraph
                 devices={devices}
                 onlineUsers={onlineUsers}
-                currentUserId={user?.id ?? null}
+                currentUserId={user?.publicUserId ?? null}
+                friendIds={friendIds}
                 onSelectDevice={handleDeviceSelect}
                 onSelectUser={handleUserSelect}
               />
@@ -337,9 +398,28 @@ export default function App() {
             setClaimDevice(device);
           }}
           onUnclaim={handleUnclaim}
+          onAddFriend={(device) => {
+            setSelectedDevice(null);
+            setAddFriendDevice(device);
+          }}
           onClose={() => setSelectedDevice(null)}
           isLoggedIn={!!user}
           apiUrl={API_URL}
+          friendIds={friendIds}
+          onlyFriendsCanPoke={onlyFriendsCanPoke}
+          onOnlyFriendsCanPokeChange={async (value) => {
+            try {
+              const res = await fetch(`${API_URL}/api/me/settings`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ onlyFriendsCanPoke: value }),
+              });
+              if (res.ok) setOnlyFriendsCanPoke(value);
+            } catch {
+              // ignore
+            }
+          }}
         />
       )}
       {selectedUser && (
@@ -357,6 +437,13 @@ export default function App() {
           apiUrl={API_URL}
           onClose={() => setClaimDevice(null)}
           onClaimed={() => setClaimDevice(null)}
+        />
+      )}
+      {addFriendDevice && (
+        <AddFriendDialog
+          device={addFriendDevice}
+          apiUrl={API_URL}
+          onClose={() => setAddFriendDevice(null)}
         />
       )}
       {hasNetworkNodes && (

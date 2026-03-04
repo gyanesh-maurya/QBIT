@@ -7,6 +7,7 @@ import passport from 'passport';
 import rateLimit from 'express-rate-limit';
 import { FRONTEND_URL, AUTH_RATE_LIMIT } from '../config';
 import { isBanned } from '../services/ban.service';
+import { ensurePublicUserId } from '../services/publicUserId.service';
 import logger from '../logger';
 import type { AppUser } from '../types';
 
@@ -52,10 +53,16 @@ router.get('/google/callback', (req, res, next) => {
   })(req, res, next);
 });
 
-// GET /auth/me -- current user info
+// GET /auth/me -- current user info (expose only publicUserId, not raw Google id)
 router.get('/me', (req, res) => {
   if (req.isAuthenticated()) {
-    res.json(req.user as AppUser);
+    const user = req.user as AppUser;
+    res.json({
+      publicUserId: ensurePublicUserId(user.id),
+      displayName: user.displayName,
+      email: user.email,
+      avatar: user.avatar,
+    });
   } else {
     res.status(401).json({ error: 'Not authenticated' });
   }
