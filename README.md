@@ -6,9 +6,11 @@
 
 **An open-source ESP32-C3 desktop companion robot and personal IoT avatar.**
 
+[![GitHub stars](https://img.shields.io/github/stars/seanchangx/QBIT)](https://github.com/seanchangx/QBIT)
 [![License: CC BY-NC-SA 4.0](https://img.shields.io/badge/License-CC_BY--NC--SA_4.0-blue.svg)](https://creativecommons.org/licenses/by-nc-sa/4.0/)
 [![Platform](https://img.shields.io/badge/Platform-ESP32--C3-green.svg)](#hardware-requirements)
 [![Web Platform](https://img.shields.io/badge/Web-qbit.labxcloud.com-purple.svg)](https://qbit.labxcloud.com)
+[![release](https://img.shields.io/github/v/release/seanchangx/QBIT)](https://github.com/seanchangx/QBIT/releases)
 
 <br>
 
@@ -26,7 +28,7 @@
 <img src="docs/images/Network.png" alt="Network" width="100%">
 <br><strong>Network</strong><br>Real-time device graph
 </td>
-<td width="50%" align="center">
+<td id="poke" width="50%" align="center">
 <img src="docs/images/Poke.png" alt="Poke" width="100%">
 <br><strong>Poke</strong><br>Send messages to devices
 </td>
@@ -36,7 +38,7 @@
 <img src="docs/images/Flash.png" alt="Flash" width="100%">
 <br><strong>Flash</strong><br>Browser-based firmware flasher
 </td>
-<td width="50%" align="center">
+<td id="library" width="50%" align="center">
 <img src="docs/images/Library.png" alt="Library" width="100%">
 <br><strong>Library</strong><br>Community animation repository
 </td>
@@ -47,6 +49,7 @@
 
 <div align="center">
 
+[**Features**](#features) &#8226;
 [**Getting Started**](#getting-started) &#8226;
 [**Hardware**](#hardware-requirements) &#8226;
 [**Web Platform**](#web-platform) &#8226;
@@ -55,6 +58,12 @@
 [**Build from Source**](#firmware-build-from-source)
 
 </div>
+
+---
+
+## Features
+
+QBIT is a retro robot-style desk companion that works like a personal BB call. Once connected to the [QBIT Network](https://qbit.labxcloud.com), anyone can [poke](#poke) your QBIT and send it messages; you can also connect and interact with other QBITs on the network. When idle, QBIT shows random expressions that change with its mood. You can browse the [Library](#library) to download community-uploaded custom animations and [upload them to your own device](#device-dashboard). QBIT integrates with [Home Assistant via MQTT](#mqtt--home-assistant)—Home Assistant can read the poke message and trigger different automations based on the content. Here is a [simple example](https://www.youtube.com/shorts/C_3Uz9TOPBY); feel free to share your own setups.
 
 ---
 
@@ -73,7 +82,7 @@
 
 Download the STL files for the QBIT enclosure from MakerWorld:
 
-- [MakerWorld: QBIT - Your IoT Desk Robot (ESP32-C3)](https://makerworld.com/en/models/2400803-qbit-your-iot-desk-robot-esp32-c3#profileId-2631417)
+<img src="https://makerworld.com/favicon.ico" width="16" height="16" alt="MakerWorld" style="vertical-align: middle" /> [MakerWorld: QBIT - Your IoT Desk Robot (ESP32-C3)](https://makerworld.com/en/models/2400803-qbit-your-iot-desk-robot-esp32-c3#profileId-2631417)
 
 ### Wiring
 
@@ -122,11 +131,20 @@ If Wi-Fi is lost for about 30 seconds, QBIT automatically opens the AP again so 
 
 ### Device Dashboard
 
-Once connected to Wi-Fi, the QBIT hosts a local web dashboard accessible at:
+Once connected to Wi-Fi, the QBIT hosts a local web dashboard accessible at `http://qbit.local`. From here you can upload and manage .qgif animations, adjust settings, and configure MQTT.
 
-```
-http://qbit.local
-```
+<table style="table-layout: fixed; width: 100%;">
+<tr>
+<td width="33%" align="center" valign="middle"><img src="docs/images/QBIT_Dashboard_01.png" alt="Dashboard" width="100%" style="max-width: 280px; display: block; margin: 0 auto;"></td>
+<td width="33%" align="center" valign="middle"><img src="docs/images/QBIT_Dashboard_02.png" alt="Files" width="100%" style="max-width: 280px; display: block; margin: 0 auto;"></td>
+<td width="33%" align="center" valign="middle"><img src="docs/images/QBIT_Dashboard_03.png" alt="Settings" width="100%" style="max-width: 280px; display: block; margin: 0 auto;"></td>
+</tr>
+<tr>
+<td align="center"><strong>Dashboard</strong><br>Storage, upload, device</td>
+<td align="center"><strong>Files</strong><br>Manage .qgif animations</td>
+<td align="center"><strong>Settings</strong><br>MQTT, timezone, GPIO</td>
+</tr>
+</table>
 
 From the dashboard you can:
 
