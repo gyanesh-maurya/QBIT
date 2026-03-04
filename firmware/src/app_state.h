@@ -61,6 +61,7 @@ struct GestureEvent {
     // Event-specific data
     char sender[33];
     char text[65];
+    char title[21];
 
     // Bitmap poke data (heap pointers, receiver must free)
     uint8_t *senderBmp;

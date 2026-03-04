@@ -70,9 +70,13 @@ export const reportSchema = z.object({
   description: z.string().max(500).transform((s) => s.trim()).pipe(z.string().min(1)),
 });
 
-// POST /api/admin/broadcast
+// POST /api/admin/broadcast (optional bitmaps for Chinese/any language, same as poke)
 export const adminBroadcastSchema = z.object({
   text: z.string().min(1).max(100),
+  senderBitmap: z.string().optional(),
+  senderBitmapWidth: z.number().int().positive().optional(),
+  textBitmap: z.string().optional(),
+  textBitmapWidth: z.number().int().positive().optional(),
 });
 
 // DELETE /api/friends/:userId (param value is publicUserId, opaque hex)

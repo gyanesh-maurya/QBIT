@@ -262,13 +262,77 @@ static void wsMessage(WebsocketsClient &client, WebsocketsMessage message) {
     }
 
     if (strcmp(msgType, "broadcast") == 0) {
-        const char *sender = doc["sender"] | "QBIT Network";
+        const char *sender = doc["sender"] | "QBIT-NETWORK";
         const char *text   = doc["text"]   | "";
-        NetworkEvent evt = {};
-        evt.kind = NetworkEvent::POKE;
-        strncpy(evt.sender, sender, sizeof(evt.sender) - 1);
-        strncpy(evt.text, text, sizeof(evt.text) - 1);
-        xQueueSend(networkEventQueue, &evt, pdMS_TO_TICKS(100));
+        const char *title  = doc["title"]  | "NOTIFY";
+
+        if (doc["senderBitmap"].is<const char*>() && doc["textBitmap"].is<const char*>()) {
+            const char *senderBmp = doc["senderBitmap"];
+            uint16_t senderW      = doc["senderBitmapWidth"] | 0;
+            const char *textBmp   = doc["textBitmap"];
+            uint16_t textW        = doc["textBitmapWidth"] | 0;
+
+            if (senderW > 0 && textW > 0 &&
+                senderW <= POKE_BMP_MAX_WIDTH && textW <= POKE_BMP_MAX_WIDTH) {
+                size_t sLen = 0, tLen = 0;
+                uint8_t *sBmp = decodeBase64Alloc(senderBmp, &sLen);
+                uint8_t *tBmp = decodeBase64Alloc(textBmp, &tLen);
+
+                bool valid = sBmp && tBmp &&
+                             isValidBitmapSize(senderW, sLen) &&
+                             isValidBitmapSize(textW, tLen);
+
+                if (valid) {
+                    NetworkEvent evt = {};
+                    evt.kind = NetworkEvent::POKE_BITMAP;
+                    strncpy(evt.sender, sender, sizeof(evt.sender) - 1);
+                    evt.sender[sizeof(evt.sender) - 1] = '\0';
+                    strncpy(evt.text, text, sizeof(evt.text) - 1);
+                    evt.text[sizeof(evt.text) - 1] = '\0';
+                    strncpy(evt.title, title, sizeof(evt.title) - 1);
+                    evt.title[sizeof(evt.title) - 1] = '\0';
+                    evt.senderBmp = sBmp;
+                    evt.senderBmpWidth = senderW;
+                    evt.senderBmpLen = sLen;
+                    evt.textBmp = tBmp;
+                    evt.textBmpWidth = textW;
+                    evt.textBmpLen = tLen;
+                    xQueueSend(networkEventQueue, &evt, pdMS_TO_TICKS(100));
+                } else {
+                    if (sBmp) free(sBmp);
+                    if (tBmp) free(tBmp);
+                    NetworkEvent evt = {};
+                    evt.kind = NetworkEvent::POKE;
+                    strncpy(evt.sender, sender, sizeof(evt.sender) - 1);
+                    evt.sender[sizeof(evt.sender) - 1] = '\0';
+                    strncpy(evt.text, text, sizeof(evt.text) - 1);
+                    evt.text[sizeof(evt.text) - 1] = '\0';
+                    strncpy(evt.title, title, sizeof(evt.title) - 1);
+                    evt.title[sizeof(evt.title) - 1] = '\0';
+                    xQueueSend(networkEventQueue, &evt, pdMS_TO_TICKS(100));
+                }
+            } else {
+                NetworkEvent evt = {};
+                evt.kind = NetworkEvent::POKE;
+                strncpy(evt.sender, sender, sizeof(evt.sender) - 1);
+                evt.sender[sizeof(evt.sender) - 1] = '\0';
+                strncpy(evt.text, text, sizeof(evt.text) - 1);
+                evt.text[sizeof(evt.text) - 1] = '\0';
+                strncpy(evt.title, title, sizeof(evt.title) - 1);
+                evt.title[sizeof(evt.title) - 1] = '\0';
+                xQueueSend(networkEventQueue, &evt, pdMS_TO_TICKS(100));
+            }
+        } else {
+            NetworkEvent evt = {};
+            evt.kind = NetworkEvent::POKE;
+            strncpy(evt.sender, sender, sizeof(evt.sender) - 1);
+            evt.sender[sizeof(evt.sender) - 1] = '\0';
+            strncpy(evt.text, text, sizeof(evt.text) - 1);
+            evt.text[sizeof(evt.text) - 1] = '\0';
+            strncpy(evt.title, title, sizeof(evt.title) - 1);
+            evt.title[sizeof(evt.title) - 1] = '\0';
+            xQueueSend(networkEventQueue, &evt, pdMS_TO_TICKS(100));
+        }
     }
 
     if (strcmp(msgType, "claim_request") == 0) {

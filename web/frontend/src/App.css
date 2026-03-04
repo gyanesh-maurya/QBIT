@@ -378,6 +378,28 @@ body {
   cursor: not-allowed;
 }
 
+.poke-remove-friend {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  padding: 8px 12px;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-muted);
+  font-size: 0.9em;
+  cursor: pointer;
+}
+.poke-remove-friend:hover:not(:disabled) {
+  background: var(--bg-accent);
+  color: var(--text-primary);
+  border-color: var(--text-muted);
+}
+.poke-remove-friend:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 /* -- Empty state -- */
 .empty-state {
   display: flex;
@@ -604,22 +626,103 @@ body {
   color: #fff;
 }
 
-.poke-setting-toggle {
+.poke-setting-switch {
   display: flex;
   align-items: center;
-  gap: 10px;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
   padding: 10px 0;
   font-size: 0.9em;
   color: var(--text-secondary);
   cursor: pointer;
-}
-.poke-setting-toggle input {
-  width: 18px;
-  height: 18px;
-  accent-color: var(--red);
-}
-.poke-setting-toggle span {
   user-select: none;
+}
+.poke-setting-switch-label {
+  flex: 1;
+}
+.poke-setting-switch-input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.poke-setting-switch-slider {
+  flex-shrink: 0;
+  width: 40px;
+  height: 22px;
+  background: var(--bg-accent);
+  border: 1px solid var(--border);
+  border-radius: 11px;
+  transition: background 0.2s, border-color 0.2s;
+}
+.poke-setting-switch-slider::after {
+  content: '';
+  display: block;
+  width: 16px;
+  height: 16px;
+  margin: 2px 0 0 2px;
+  background: var(--text-muted);
+  border-radius: 50%;
+  transition: transform 0.2s, background 0.2s;
+}
+.poke-setting-switch-input:checked + .poke-setting-switch-slider {
+  background: var(--red);
+  border-color: var(--red);
+}
+.poke-setting-switch-input:checked + .poke-setting-switch-slider::after {
+  transform: translateX(18px);
+  background: #fff;
+}
+.poke-setting-switch-input:focus-visible + .poke-setting-switch-slider {
+  outline: 2px solid var(--red);
+  outline-offset: 2px;
+}
+
+.poke-friends-section {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.poke-friends-title {
+  font-size: 0.85em;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+.poke-friends-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.poke-friends-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.9em;
+}
+.poke-friends-item:last-child {
+  border-bottom: none;
+}
+.poke-friends-name {
+  color: var(--text-primary);
+}
+.poke-friends-remove {
+  padding: 4px 10px;
+  font-size: 0.85em;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.poke-friends-remove:hover {
+  background: var(--bg-accent);
+  color: var(--text-primary);
+  border-color: var(--text-muted);
 }
 
 /* -- Claim dialog -- */

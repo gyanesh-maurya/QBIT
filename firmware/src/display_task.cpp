@@ -264,7 +264,7 @@ void displayTask(void *param) {
                         if (cur && _state == POKE_DISPLAY && strcmp(netEvt.text, "Poke!") == 0 && strcmp(cur, "Poke!") != 0) {
                             break;
                         }
-                        handlePoke(netEvt.sender, netEvt.text);
+                        handlePoke(netEvt.sender, netEvt.text, netEvt.title[0] ? netEvt.title : nullptr);
                         if (getBuzzerVolume() > 0) {
                             noTone(getPinBuzzer());
                             rtttl::begin(getPinBuzzer(), POKE_MELODY);
@@ -275,10 +275,12 @@ void displayTask(void *param) {
 
                 case NetworkEvent::POKE_BITMAP:
                     if (_state != CLAIM_PROMPT && _state != FRIEND_PROMPT && _state != MUTE_FEEDBACK) {
+                        const char *tit = netEvt.title[0] ? netEvt.title : nullptr;
                         handlePokeBitmapFromPtrs(
                             netEvt.sender, netEvt.text,
                             netEvt.senderBmp, netEvt.senderBmpWidth, netEvt.senderBmpLen,
-                            netEvt.textBmp, netEvt.textBmpWidth, netEvt.textBmpLen);
+                            netEvt.textBmp, netEvt.textBmpWidth, netEvt.textBmpLen,
+                            tit);
                         netEvt.senderBmp = nullptr;
                         netEvt.textBmp   = nullptr;
                         if (getBuzzerVolume() > 0) {

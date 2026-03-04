@@ -28,6 +28,8 @@ static unsigned long _pokeLastScrollMs = 0;
 // Text-only poke (for scroll, same layout as bitmap: title fixed, sender/message scroll separately)
 #define POKE_TEXT_SENDER_LEN  33
 #define POKE_TEXT_MESSAGE_LEN 65
+#define POKE_TITLE_LINE_LEN   32  // ">> " + title + " <<"
+static char     _pokeTitleLine[POKE_TITLE_LINE_LEN];
 static char     _pokeTextSender[POKE_TEXT_SENDER_LEN];
 static char     _pokeTextMessage[POKE_TEXT_MESSAGE_LEN];
 static int16_t  _pokeTextSenderScrollOffset  = 0;
@@ -158,9 +160,9 @@ static void drawBitmapToBuffer(const uint8_t *bmpData, uint16_t bmpWidth,
 void showPokeBitmap() {
     u8g2.clearBuffer();
 
-    // Row 1: ">> Poke! <<" header
+    // Row 1: title header (e.g. ">> Poke! <<" or ">> Broadcast <<")
     u8g2.setFont(u8g2_font_6x13_tr);
-    u8g2.drawStr(4, 13, ">> Poke! <<");
+    u8g2.drawStr(4, 13, _pokeTitleLine[0] ? _pokeTitleLine : ">> Poke! <<");
 
     // Row 2: sender name bitmap
     const int16_t senderY = 15;
@@ -306,7 +308,7 @@ void showPokeHistoryText(const PokeRecord *rec, const char *header, int16_t send
 static void showPokeText(int16_t senderScroll, int16_t messageScroll) {
     u8g2.clearBuffer();
     u8g2.setFont(u8g2_font_6x13_tr);
-    u8g2.drawStr(4, 13, ">> Poke! <<");
+    u8g2.drawStr(4, 13, _pokeTitleLine[0] ? _pokeTitleLine : ">> Poke! <<");
 
     // Sender row (6x13)
     int16_t sx = 4 - senderScroll;
@@ -338,7 +340,7 @@ static bool isEmptyOrNaN(const char *s) {
     return strcmp(s, "NaN") == 0;
 }
 
-void handlePoke(const char *sender, const char *text) {
+void handlePoke(const char *sender, const char *text, const char *title) {
     freePokeBitmaps();
     _pokeActive  = true;
     _pokeStartMs = millis();
@@ -346,6 +348,13 @@ void handlePoke(const char *sender, const char *text) {
     _pokeTextSenderScrollOffset  = 0;
     _pokeTextMessageScrollOffset = 0;
     _pokeLastScrollMs = millis();
+
+    const char *tit = (title && title[0]) ? title : "Poke!";
+    if (strcmp(tit, "NOTIFY") == 0) {
+      snprintf(_pokeTitleLine, sizeof(_pokeTitleLine), "[ NOTIFY ]");
+    } else {
+      snprintf(_pokeTitleLine, sizeof(_pokeTitleLine), ">> %s <<", tit);
+    }
 
     const char *s = isEmptyOrNaN(sender) ? "-" : sender;
     const char *t = (text && text[0]) ? text : "Poke!";
@@ -356,7 +365,7 @@ void handlePoke(const char *sender, const char *text) {
     _pokeTextMessage[POKE_TEXT_MESSAGE_LEN - 1] = '\0';
 
     u8g2.setFont(u8g2_font_6x13_tr);
-    uint16_t w1 = u8g2.getStrWidth(">> Poke! <<");
+    uint16_t w1 = u8g2.getStrWidth(_pokeTitleLine);
     _pokeTextSenderWidth  = u8g2.getStrWidth(_pokeTextSender);
     u8g2.setFont(u8g2_font_7x14_tr);
     _pokeTextMessageWidth = u8g2.getStrWidth(_pokeTextMessage);
@@ -377,6 +386,7 @@ void handlePokeBitmap(const char *sender, const char *text,
                       const char *senderBmp64, uint16_t senderW,
                       const char *textBmp64, uint16_t textW) {
     freePokeBitmaps();
+    snprintf(_pokeTitleLine, sizeof(_pokeTitleLine), ">> Poke! <<");
 
     // Decode sender bitmap
     size_t senderLen = 0;
@@ -416,8 +426,14 @@ void handlePokeBitmap(const char *sender, const char *text,
 
 void handlePokeBitmapFromPtrs(const char *sender, const char *text,
                               uint8_t *senderBmp, uint16_t senderW, size_t senderLen,
-                              uint8_t *textBmp, uint16_t textW, size_t textLen) {
+                              uint8_t *textBmp, uint16_t textW, size_t textLen,
+                              const char *title) {
     freePokeBitmaps();
+    if (title && strcmp(title, "NOTIFY") == 0) {
+        snprintf(_pokeTitleLine, sizeof(_pokeTitleLine), "[ NOTIFY ]");
+    } else {
+        snprintf(_pokeTitleLine, sizeof(_pokeTitleLine), ">> Poke! <<");
+    }
 
     _pokeSenderBmp = senderBmp;
     if (_pokeSenderBmp && senderW > 0) {

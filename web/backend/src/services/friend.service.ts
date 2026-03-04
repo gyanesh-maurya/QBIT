@@ -21,6 +21,22 @@ export function getFriendIds(userId: string): string[] {
   return rows.map((r) => r.friendId);
 }
 
+/** All unique friend pairs (each pair once, normalized so a < b by internal id). For global graph display. */
+export function getAllFriendPairs(): Array<{ a: string; b: string }> {
+  const rows = db.prepare('SELECT userId, friendId FROM friends').all() as Array<{ userId: string; friendId: string }>;
+  const seen = new Set<string>();
+  const pairs: Array<{ a: string; b: string }> = [];
+  for (const r of rows) {
+    const a = r.userId < r.friendId ? r.userId : r.friendId;
+    const b = r.userId < r.friendId ? r.friendId : r.userId;
+    const key = `${a}\t${b}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    pairs.push({ a, b });
+  }
+  return pairs;
+}
+
 export function addFriend(userIdA: string, userIdB: string): void {
   if (userIdA === userIdB) return;
   stmtAddFriend.run(userIdA, userIdB);

@@ -191,6 +191,16 @@ router.get('/friends', (req, res) => {
   res.json({ friendIds });
 });
 
+// GET /api/friends/pairs -- all friend pairs (publicUserIds), globally visible (no login required)
+router.get('/friends/pairs', (_req, res) => {
+  const pairs = friendService.getAllFriendPairs();
+  const friendPairs = pairs.map(({ a, b }) => ({
+    a: ensurePublicUserId(a),
+    b: ensurePublicUserId(b),
+  }));
+  res.json({ friendPairs });
+});
+
 // POST /api/friends/request
 router.post('/friends/request', requireNotBanned, validate(friendRequestSchema), (req, res) => {
   if (!req.isAuthenticated()) {

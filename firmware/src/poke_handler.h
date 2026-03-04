@@ -10,8 +10,9 @@
 // Initialize poke handler state.
 void pokeHandlerInit();
 
-// Handle a text-only poke (shows sender + text on OLED).
-void handlePoke(const char *sender, const char *text);
+// Handle a text-only poke (shows sender + text on OLED). Same layout and scrolling as bitmap.
+// title: display header e.g. "Poke!" or "Broadcast"; null or empty = "Poke!".
+void handlePoke(const char *sender, const char *text, const char *title = nullptr);
 
 // Handle a bitmap poke (pre-rendered sender + text bitmaps).
 void handlePokeBitmap(const char *sender, const char *text,
@@ -19,9 +20,11 @@ void handlePokeBitmap(const char *sender, const char *text,
                       const char *textBmp64, uint16_t textW);
 
 // Handle a bitmap poke from pre-decoded heap pointers (ownership transferred).
+// title: optional display header e.g. "NOTIFY" for broadcast ("[ NOTIFY ]"); null = ">> Poke! <<".
 void handlePokeBitmapFromPtrs(const char *sender, const char *text,
                               uint8_t *senderBmp, uint16_t senderW, size_t senderLen,
-                              uint8_t *textBmp, uint16_t textW, size_t textLen);
+                              uint8_t *textBmp, uint16_t textW, size_t textLen,
+                              const char *title = nullptr);
 
 // Render the current bitmap poke frame (with scrolling).
 void showPokeBitmap();

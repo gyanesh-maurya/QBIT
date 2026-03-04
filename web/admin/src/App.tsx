@@ -6,6 +6,48 @@ import {
   VIRTUAL_BAN_ROW_HEIGHT,
 } from './VirtualScroll';
 
+// Render text to 1bpp bitmap (SSD1306 page format) for broadcast/poke display; supports any language.
+function renderTextToBitmap(
+  text: string,
+  fontSize: number = 14
+): { bitmap: string; width: number; height: number } {
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d')!;
+  ctx.font = `bold ${fontSize}px sans-serif`;
+  const metrics = ctx.measureText(text);
+  const textWidth = Math.ceil(metrics.width);
+  const textHeight = fontSize + 4;
+  const height = Math.ceil(textHeight / 8) * 8;
+  const width = Math.max(textWidth + 2, 1);
+  canvas.width = width;
+  canvas.height = height;
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, width, height);
+  ctx.fillStyle = '#fff';
+  ctx.font = `bold ${fontSize}px sans-serif`;
+  ctx.textBaseline = 'top';
+  ctx.fillText(text, 1, 2);
+  const imageData = ctx.getImageData(0, 0, width, height);
+  const pages = height / 8;
+  const bytes = new Uint8Array(width * pages);
+  for (let x = 0; x < width; x++) {
+    for (let page = 0; page < pages; page++) {
+      let byte = 0;
+      for (let bit = 0; bit < 8; bit++) {
+        const y = page * 8 + bit;
+        if (y < height) {
+          const idx = (y * width + x) * 4;
+          if (imageData.data[idx] > 127) byte |= 1 << bit;
+        }
+      }
+      bytes[page * width + x] = byte;
+    }
+  }
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return { bitmap: btoa(binary), width, height };
+}
+
 interface Session {
   socketId: string;
   userId: string;
@@ -490,7 +532,14 @@ export default function App() {
     setShowBroadcastConfirm(false);
     setBroadcastSending(true);
     try {
-      await post('/api/broadcast', { text });
+      const body: { text: string; senderBitmap?: string; senderBitmapWidth?: number; textBitmap?: string; textBitmapWidth?: number } = { text };
+      const senderBmp = renderTextToBitmap('QBIT-NETWORK', 13);
+      const textBmp = renderTextToBitmap(text, 14);
+      body.senderBitmap = senderBmp.bitmap;
+      body.senderBitmapWidth = senderBmp.width;
+      body.textBitmap = textBmp.bitmap;
+      body.textBitmapWidth = textBmp.width;
+      await post('/api/broadcast', body);
       setBroadcastText('');
     } catch (e) {
       if ((e instanceof Error && e.message) === 'UNAUTHORIZED') handleUnauthorized();
@@ -829,7 +878,7 @@ export default function App() {
                       <thead>
                         <tr>
                           <th></th>
-                          <th>User ID</th>
+                          <th title="Internal account ID (used for ban/moderation)">User ID</th>
                           <th>Name</th>
                           <th>Email</th>
                           <th>Last seen</th>
@@ -919,7 +968,7 @@ export default function App() {
                           <th></th>
                           <th>Name</th>
                           <th>Email</th>
-                          <th>User ID</th>
+                          <th title="Internal account ID (used for ban/moderation)">User ID</th>
                           <th>IP</th>
                           <th>Connected</th>
                           <th>Actions</th>

@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import type { Device, User } from '../types';
+import type { Device, User, OnlineUser } from '../types';
 
 interface Props {
   device: Device;
@@ -12,8 +12,10 @@ interface Props {
   isLoggedIn: boolean;
   apiUrl: string;
   friendIds?: string[];
+  onlineUsers?: OnlineUser[];
   onlyFriendsCanPoke?: boolean;
   onOnlyFriendsCanPokeChange?: (value: boolean) => void;
+  onRemoveFriend?: (publicUserId: string) => Promise<void>;
 }
 
 export interface BitmapPayload {
@@ -108,8 +110,10 @@ export default function PokeDialog({
   isLoggedIn,
   apiUrl,
   friendIds = [],
+  onlineUsers = [],
   onlyFriendsCanPoke = false,
   onOnlyFriendsCanPokeChange,
+  onRemoveFriend,
 }: Props) {
   const isMyDevice = !!user && !!device.claimedBy?.publicUserId && device.claimedBy.publicUserId === user.publicUserId;
   const isOthersClaimedDevice = !!device.claimedBy && !isMyDevice;
@@ -213,22 +217,52 @@ export default function PokeDialog({
 
             {isMyDevice && (
               <>
-                {onOnlyFriendsCanPokeChange != null && (
-                  <label className="poke-setting-toggle">
-                    <input
-                      type="checkbox"
-                      checked={onlyFriendsCanPoke}
-                      onChange={(e) => onOnlyFriendsCanPokeChange(e.target.checked)}
-                    />
-                    <span>Only friends can poke this QBIT</span>
-                  </label>
-                )}
                 <button
                   className="btn-claim-link unclaim"
                   onClick={() => onUnclaim(device)}
                 >
                   Unclaim this device
                 </button>
+                {onOnlyFriendsCanPokeChange != null && (
+                  <label className="poke-setting-switch">
+                    <span className="poke-setting-switch-label">Only friends can poke this QBIT</span>
+                    <input
+                      type="checkbox"
+                      className="poke-setting-switch-input"
+                      checked={onlyFriendsCanPoke}
+                      onChange={(e) => onOnlyFriendsCanPokeChange(e.target.checked)}
+                    />
+                    <span className="poke-setting-switch-slider" />
+                  </label>
+                )}
+                {friendIds.length > 0 && (
+                  <div className="poke-friends-section">
+                    <div className="poke-friends-title">Friends</div>
+                    <ul className="poke-friends-list">
+                      {friendIds.map((publicUserId) => {
+                        const online = onlineUsers.find((u) => u.publicUserId === publicUserId);
+                        const displayName = online?.displayName ?? 'Friend';
+                        return (
+                          <li key={publicUserId} className="poke-friends-item">
+                            <span className="poke-friends-name">{displayName}</span>
+                            {onRemoveFriend && (
+                              <button
+                                type="button"
+                                className="poke-friends-remove"
+                                onClick={async () => {
+                                  if (!confirm(`Remove ${displayName} from friends?`)) return;
+                                  await onRemoveFriend(publicUserId);
+                                }}
+                              >
+                                Remove
+                              </button>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                )}
               </>
             )}
             {showAddFriend && (

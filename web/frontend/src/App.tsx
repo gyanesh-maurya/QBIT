@@ -36,6 +36,7 @@ export default function App() {
   const [claimDevice, setClaimDevice] = useState<Device | null>(null);
   const [addFriendDevice, setAddFriendDevice] = useState<Device | null>(null);
   const [friendIds, setFriendIds] = useState<string[]>([]);
+  const [friendPairs, setFriendPairs] = useState<Array<{ a: string; b: string }>>([]);
   const [onlyFriendsCanPoke, setOnlyFriendsCanPoke] = useState(false);
   const [notifications, setNotifications] = useState<PokeNotification[]>([]);
   const [showPokeHistory, setShowPokeHistory] = useState(false);
@@ -44,6 +45,7 @@ export default function App() {
   const notificationIdRef = useRef(0);
   const socketRef = useRef<Socket | null>(null);
   const fetchFriendsRef = useRef<() => void>(() => {});
+  const addFriendDeviceRef = useRef<Device | null>(null);
   const networkBarTouchStartRef = useRef<number | null>(null);
   const networkBarMouseStartRef = useRef<number | null>(null);
   const pillOpenedByMouseDragRef = useRef(false);
@@ -94,16 +96,20 @@ export default function App() {
       .catch(() => setUser(null));
   }, []);
 
-  // Fetch friends and settings when user is set
+  // Fetch friends (when logged in) and global friend pairs (always, no login required)
   const fetchFriends = useCallback(() => {
-    if (!user) {
+    if (user) {
+      fetch(`${API_URL}/api/friends`, { credentials: 'include' })
+        .then((r) => (r.ok ? r.json() : { friendIds: [] }))
+        .then((data) => setFriendIds(data.friendIds || []))
+        .catch(() => setFriendIds([]));
+    } else {
       setFriendIds([]);
-      return;
     }
-    fetch(`${API_URL}/api/friends`, { credentials: 'include' })
-      .then((r) => (r.ok ? r.json() : { friendIds: [] }))
-      .then((data) => setFriendIds(data.friendIds || []))
-      .catch(() => setFriendIds([]));
+    fetch(`${API_URL}/api/friends/pairs`, { credentials: 'include' })
+      .then((r) => (r.ok ? r.json() : { friendPairs: [] }))
+      .then((data) => setFriendPairs(data.friendPairs || []))
+      .catch(() => setFriendPairs([]));
   }, [user]);
   const fetchSettings = useCallback(() => {
     if (!user) {
@@ -119,6 +125,10 @@ export default function App() {
     fetchFriends();
     fetchSettings();
   }, [fetchFriends, fetchSettings]);
+
+  useEffect(() => {
+    addFriendDeviceRef.current = addFriendDevice;
+  }, [addFriendDevice]);
 
   fetchFriendsRef.current = fetchFriends;
 
@@ -137,8 +147,20 @@ export default function App() {
     });
 
     s.on('friends:update', () => {
+      const hadPending = addFriendDeviceRef.current !== null;
       setAddFriendDevice(null);
       fetchFriendsRef.current();
+      if (hadPending) {
+        const id = ++notificationIdRef.current;
+        setNotifications((prev) => {
+          const next = [...prev, { id, from: 'QBIT', text: 'Friends list updated.', exiting: false }];
+          return next.slice(-3);
+        });
+        setTimeout(() => {
+          setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, exiting: true } : n)));
+          setTimeout(() => setNotifications((prev) => prev.filter((n) => n.id !== id)), 300);
+        }, 4000);
+      }
     });
 
     s.on('friend_request:result', (data: { result: string }) => {
@@ -311,6 +333,7 @@ export default function App() {
                 onlineUsers={onlineUsers}
                 currentUserId={user?.publicUserId ?? null}
                 friendIds={friendIds}
+                friendPairs={friendPairs}
                 onSelectDevice={handleDeviceSelect}
                 onSelectUser={handleUserSelect}
               />
@@ -406,6 +429,7 @@ export default function App() {
           isLoggedIn={!!user}
           apiUrl={API_URL}
           friendIds={friendIds}
+          onlineUsers={onlineUsers}
           onlyFriendsCanPoke={onlyFriendsCanPoke}
           onOnlyFriendsCanPokeChange={async (value) => {
             try {
@@ -420,6 +444,18 @@ export default function App() {
               // ignore
             }
           }}
+          onRemoveFriend={async (publicUserId) => {
+            const res = await fetch(`${API_URL}/api/friends/${encodeURIComponent(publicUserId)}`, {
+              method: 'DELETE',
+              credentials: 'include',
+            });
+            if (!res.ok) {
+              const data = await res.json();
+              alert(data.error || 'Failed to remove friend');
+              return;
+            }
+            fetchFriendsRef.current();
+          }}
         />
       )}
       {selectedUser && (
@@ -429,6 +465,19 @@ export default function App() {
           onClose={() => setSelectedUser(null)}
           isLoggedIn={!!user}
           apiUrl={API_URL}
+          isFriend={friendIds.includes(selectedUser.publicUserId)}
+          onRemoveFriend={async (publicUserId) => {
+            const res = await fetch(`${API_URL}/api/friends/${encodeURIComponent(publicUserId)}`, {
+              method: 'DELETE',
+              credentials: 'include',
+            });
+            if (!res.ok) {
+              const data = await res.json();
+              alert(data.error || 'Failed to remove friend');
+              return;
+            }
+            fetchFriendsRef.current();
+          }}
         />
       )}
       {claimDevice && (

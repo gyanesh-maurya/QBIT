@@ -221,15 +221,27 @@ router.delete('/reports/:id', adminAuth, validateParams(adminReportIdParamSchema
   res.json({ ok: true });
 });
 
-// POST /api/broadcast -- send message to all online QBIT devices (like poke, source QBIT Network)
+// POST /api/broadcast -- send message to all online QBIT devices (title "[ NOTIFY ]", source QBIT-NETWORK)
 router.post('/broadcast', adminAuth, validate(adminBroadcastSchema), (req, res) => {
-  const { text } = req.body as { text: string };
-  const payload = {
+  const { text, senderBitmap, senderBitmapWidth, textBitmap, textBitmapWidth } = req.body as {
+    text: string;
+    senderBitmap?: string;
+    senderBitmapWidth?: number;
+    textBitmap?: string;
+    textBitmapWidth?: number;
+  };
+  const payload: Record<string, unknown> = {
     type: 'broadcast',
-    sender: 'QBIT Network',
-    title: 'QBIT Network',
+    sender: 'QBIT-NETWORK',
+    title: 'NOTIFY',
     text: text.substring(0, 100),
   };
+  if (senderBitmap && textBitmap && senderBitmapWidth && textBitmapWidth) {
+    payload.senderBitmap = senderBitmap;
+    payload.senderBitmapWidth = senderBitmapWidth;
+    payload.textBitmap = textBitmap;
+    payload.textBitmapWidth = textBitmapWidth;
+  }
   deviceService.broadcastToAllDevices(payload);
   logger.info({ text: payload.text }, 'Admin broadcast sent to all devices');
   res.json({ ok: true });

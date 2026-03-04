@@ -15,18 +15,22 @@ interface Props {
   onlineUsers: OnlineUser[];
   currentUserId: string | null;
   friendIds?: string[];
+  /** All friend pairs (global); edges drawn for pairs where both users are online */
+  friendPairs?: Array<{ a: string; b: string }>;
   onSelectDevice: (device: Device) => void;
   onSelectUser: (user: OnlineUser) => void;
 }
 
-// Friendship edges: others' QBIT–owner, my QBIT–my friends (my-claim edge uses inherit: 'both' gradient)
-const EDGE_FRIEND_COLOR = '#f57c00';
+// All edges use gradient (inherit node colors); shorter length for friends/own so they cluster
+const EDGE_FRIEND_LENGTH = 100;
+const EDGE_OTHER_LENGTH = 180;
 
 export default function NetworkGraph({
   devices,
   onlineUsers,
   currentUserId,
   friendIds = [],
+  friendPairs = [],
   onSelectDevice,
   onSelectUser,
 }: Props) {
@@ -55,6 +59,10 @@ export default function NetworkGraph({
   useEffect(() => {
     friendIdsRef.current = friendIds;
   }, [friendIds]);
+  const friendPairsRef = useRef(friendPairs);
+  useEffect(() => {
+    friendPairsRef.current = friendPairs;
+  }, [friendPairs]);
   useEffect(() => {
     onSelectDeviceRef.current = onSelectDevice;
   }, [onSelectDevice]);
@@ -245,9 +253,30 @@ export default function NetworkGraph({
       }
     });
 
-    // Device-to-user edges: claimed device -> owner (gradient blue-to-red if my QBIT, else solid blue); my device -> my friends (blue)
+    // User-to-user friend edges (global: all friend pairs where both users are online)
+    const friendEdgeIds = new Set<string>();
+    friendPairs.forEach(({ a, b }) => {
+      const fromId = userNodeId(a);
+      const toId = userNodeId(b);
+      if (!userIds.has(fromId) || !userIds.has(toId)) return;
+      const [pa, pb] = a < b ? [a, b] : [b, a];
+      const eid = `edge-friend-${pa}-${pb}`;
+      friendEdgeIds.add(eid);
+      if (edges.get(eid)) {
+        edges.update({ id: eid, color: { inherit: 'both' as const }, length: EDGE_FRIEND_LENGTH });
+      } else {
+        edges.add({
+          id: eid,
+          from: fromId,
+          to: toId,
+          color: { inherit: 'both' as const },
+          length: EDGE_FRIEND_LENGTH,
+        });
+      }
+    });
+
+    // Device-to-user edges: claimed device -> owner, and my device -> my friends (all gradient inherit)
     const d2uEdgeIds = new Set<string>();
-    const linkLength = 180;
     devices.forEach((d) => {
       if (!d.claimedBy?.publicUserId) return;
       const ownerNodeId = userNodeId(d.claimedBy.publicUserId);
@@ -255,6 +284,7 @@ export default function NetworkGraph({
       const edgeId = `edge-d2u-${d.id}-${d.claimedBy.publicUserId}`;
       d2uEdgeIds.add(edgeId);
       const isMyClaim = d.claimedBy.publicUserId === currentUserId;
+      const len = isMyClaim ? EDGE_FRIEND_LENGTH : EDGE_OTHER_LENGTH;
       if (edges.get(edgeId)) {
         if (isMyClaim) {
           edges.update({
@@ -262,26 +292,24 @@ export default function NetworkGraph({
             from: ownerNodeId,
             to: d.id,
             color: { inherit: 'both' as const },
-            length: linkLength,
+            length: len,
           });
         } else {
-          edges.update({ id: edgeId, from: d.id, to: ownerNodeId, color: EDGE_FRIEND_COLOR, length: linkLength });
+          edges.update({ id: edgeId, from: d.id, to: ownerNodeId, color: { inherit: 'both' as const }, length: len });
         }
       } else {
         if (isMyClaim) {
-          // Edge from user (blue) to device (red) so gradient is blue -> red
           edges.add({
             id: edgeId,
             from: ownerNodeId,
             to: d.id,
             color: { inherit: 'both' as const },
-            length: linkLength,
+            length: len,
           });
         } else {
-          edges.add({ id: edgeId, from: d.id, to: ownerNodeId, color: EDGE_FRIEND_COLOR, length: linkLength });
+          edges.add({ id: edgeId, from: d.id, to: ownerNodeId, color: { inherit: 'both' as const }, length: len });
         }
       }
-      // My QBIT -> my friends (blue)
       if (isMyClaim && friendIds.length > 0) {
         friendIds.forEach((friendId) => {
           const friendNodeId = userNodeId(friendId);
@@ -289,27 +317,28 @@ export default function NetworkGraph({
           const friendEdgeId = `edge-d2u-${d.id}-friend-${friendId}`;
           d2uEdgeIds.add(friendEdgeId);
           if (edges.get(friendEdgeId)) {
-            edges.update({ id: friendEdgeId, color: EDGE_FRIEND_COLOR, length: linkLength });
+            edges.update({ id: friendEdgeId, color: { inherit: 'both' as const }, length: EDGE_FRIEND_LENGTH });
           } else {
             edges.add({
               id: friendEdgeId,
               from: d.id,
               to: friendNodeId,
-              color: EDGE_FRIEND_COLOR,
-              length: linkLength,
+              color: { inherit: 'both' as const },
+              length: EDGE_FRIEND_LENGTH,
             });
           }
         });
       }
     });
-    // Remove stale d2u edges
+    // Remove stale d2u and friend edges
     const allEdgeIds = edges.getIds() as string[];
     allEdgeIds.forEach((eid) => {
-      if (eid.startsWith('edge-d2u-') && !d2uEdgeIds.has(eid)) {
+      if ((eid.startsWith('edge-d2u-') && !d2uEdgeIds.has(eid)) ||
+          (eid.startsWith('edge-friend-') && !friendEdgeIds.has(eid))) {
         edges.remove(eid);
       }
     });
-  }, [devices, onlineUsers, currentUserId, friendIds]);
+  }, [devices, onlineUsers, currentUserId, friendIds, friendPairs]);
 
   // Center / fit the view
   const handleFit = useCallback(() => {

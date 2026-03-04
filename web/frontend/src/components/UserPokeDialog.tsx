@@ -7,6 +7,8 @@ interface Props {
   onClose: () => void;
   isLoggedIn: boolean;
   apiUrl: string;
+  isFriend?: boolean;
+  onRemoveFriend?: (publicUserId: string) => Promise<void>;
 }
 
 const QUICK_MESSAGES = [
@@ -20,9 +22,10 @@ const QUICK_MESSAGES = [
 
 const MAX_LENGTH = 25;
 
-export default function UserPokeDialog({ target, onPoke, onClose, isLoggedIn, apiUrl }: Props) {
+export default function UserPokeDialog({ target, onPoke, onClose, isLoggedIn, apiUrl, isFriend, onRemoveFriend }: Props) {
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
+  const [removing, setRemoving] = useState(false);
 
   // Guard: ignore overlay clicks for a short period after opening
   const readyRef = useRef(false);
@@ -102,6 +105,22 @@ export default function UserPokeDialog({ target, onPoke, onClose, isLoggedIn, ap
             >
               {sending ? 'Sending...' : 'Send Poke'}
             </button>
+            {isFriend && onRemoveFriend && (
+              <button
+                type="button"
+                className="poke-remove-friend"
+                onClick={async () => {
+                  if (!confirm(`Remove ${target.displayName} from your friends?`)) return;
+                  setRemoving(true);
+                  await onRemoveFriend(target.publicUserId);
+                  setRemoving(false);
+                  onClose();
+                }}
+                disabled={removing}
+              >
+                {removing ? 'Removing...' : 'Remove friend'}
+              </button>
+            )}
           </>
         )}
       </div>
