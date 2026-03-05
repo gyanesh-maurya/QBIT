@@ -617,6 +617,7 @@ void networkTask(void *param) {
                 // WiFi just connected or reconnected
                 if (!_wifiConnected) {
                     _wifiConnected = true;
+                    wifiRestoreStaTxPower();
                     xEventGroupSetBits(connectivityBits, WIFI_CONNECTED_BIT);
 
                     NetworkEvent evt = {};
@@ -745,5 +746,13 @@ void wifiApplyApRfStabilityForPcbAntenna() {
         WiFi.setTxPower(WIFI_POWER_13dBm);
         esp_wifi_set_bandwidth(WIFI_IF_AP, WIFI_BW_HT20);
     }
+#endif
+}
+
+// Restore default TX power for STA. setTxPower() is global; 13dBm from AP fix would otherwise persist and weaken STA/MQTT/dashboard.
+void wifiRestoreStaTxPower() {
+#if defined(ESP32)
+    if (WiFi.getMode() == WIFI_STA)
+        WiFi.setTxPower(WIFI_POWER_19_5dBm);
 #endif
 }

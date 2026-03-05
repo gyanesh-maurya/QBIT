@@ -27,5 +27,7 @@ void networkWifiReset();
 
 // Apply AP RF settings for ESP32-C3 PCB antenna stability (TX power, HT20). Call after portal is up.
 void wifiApplyApRfStabilityForPcbAntenna();
+// Restore default TX power when running as STA (connected). Call when WiFi just connected; 13dBm from AP fix would otherwise persist and weaken STA.
+void wifiRestoreStaTxPower();
 
 #endif // NETWORK_TASK_H
