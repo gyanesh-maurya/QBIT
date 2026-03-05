@@ -45,7 +45,7 @@ void setup() {
 
     // 2. Display (reconstruct U8G2 with NVS pins)
     new (&u8g2) U8G2_SSD1306_128X64_NONAME_F_HW_I2C(
-        U8G2_R0, U8X8_PIN_NONE, getPinSCL(), getPinSDA());
+        U8G2_R2, U8X8_PIN_NONE, getPinSCL(), getPinSDA());
     u8g2.setBusClock(400000);
     u8g2.begin();
     clearFullGDDRAM();

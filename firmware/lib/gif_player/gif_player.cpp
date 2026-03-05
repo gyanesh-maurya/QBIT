@@ -364,49 +364,35 @@ void gifPlayerTick() {
 }
 
 // ---------------------------------------------------------------------------
-// gifRenderFrame -- 8x8 block transpose with inversion + 180-deg rotation
+// gifRenderFrame -- rotation-aware render via U8G2 drawBitmap
 // ---------------------------------------------------------------------------
-// Identical to the original playGIF() logic but operates on a RAM buffer
-// instead of PROGMEM, so it can be shared between boot animation and
-// file-based playback.
-void gifRenderFrame(U8G2 *display, const uint8_t *frameData,
+// qgif stores 0=lit, 1=dark. U8G2 drawBitmap draws bit=1 as foreground.
+// Invert frameData in-place first, then drawBitmap (respects U8G2_R2),
+// then apply the same rotateBuffer180 post-process as the text pipeline.
+void gifRenderFrame(U8G2 *display, uint8_t *frameData,
                     uint16_t width, uint16_t height) {
-  uint8_t       *buf   = display->getBufferPtr();
-  const uint16_t bpr   = (width + 7) / 8;   // bytes per row
-  const uint8_t  pages = height / 8;
+  // Invert in-place so bit=1 means lit pixel for drawBitmap
+  const uint16_t dataLen = (uint16_t)(width / 8) * height;
+  for (uint16_t i = 0; i < dataLen; i++) frameData[i] ^= 0xFF;
 
-  for (uint8_t sp = 0; sp < pages; sp++) {
-    uint8_t dp = pages - 1 - sp;
-    for (uint8_t sbc = 0; sbc < bpr; sbc++) {
-      uint8_t dbc = bpr - 1 - sbc;
+  display->clearBuffer();
+  display->setDrawColor(1);
+  display->drawBitmap(0, 0, width / 8, height, frameData);
 
-      // Read & invert 8 source rows for this block
-      uint8_t r[8];
-      for (uint8_t row = 0; row < 8; row++)
-        r[row] = ~frameData[(sp * 8 + row) * bpr + sbc];
-
-      // Transpose into vertical-page bytes
-      uint16_t base = (uint16_t)dp * 128 + (uint16_t)dbc * 8;
-      for (uint8_t col = 0; col < 8; col++) {
-        uint8_t m = 0x80 >> col;
-        uint8_t v = 0;
-        if (r[0] & m) v |= 0x80;
-        if (r[1] & m) v |= 0x40;
-        if (r[2] & m) v |= 0x20;
-        if (r[3] & m) v |= 0x10;
-        if (r[4] & m) v |= 0x08;
-        if (r[5] & m) v |= 0x04;
-        if (r[6] & m) v |= 0x02;
-        if (r[7] & m) v |= 0x01;
-        buf[base + 7 - col] = v;
-      }
-    }
+  // rotateBuffer180: swap bytes end-to-end, then reverse bits within each byte
+  uint8_t        *buf = display->getBufferPtr();
+  const uint16_t  len = 1024;
+  for (uint16_t i = 0; i < len / 2; i++) {
+    uint8_t tmp      = buf[i];
+    buf[i]           = buf[len - 1 - i];
+    buf[len - 1 - i] = tmp;
   }
-
-  // Black out edge columns (padding artifacts)
-  for (uint8_t p = 0; p < pages; p++) {
-    buf[p * 128]       = 0x00;
-    buf[p * 128 + 127] = 0x00;
+  for (uint16_t i = 0; i < len; i++) {
+    uint8_t b = buf[i];
+    b = ((b & 0xF0) >> 4) | ((b & 0x0F) << 4);
+    b = ((b & 0xCC) >> 2) | ((b & 0x33) << 2);
+    b = ((b & 0xAA) >> 1) | ((b & 0x55) << 1);
+    buf[i] = b;
   }
 
   display->sendBuffer();
