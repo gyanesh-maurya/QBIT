@@ -143,7 +143,9 @@ router.post('/claim', requireNotBanned, validate(claimSchema), (req, res) => {
   );
 
   const timer = setTimeout(() => {
+    const pending = deviceService.getPendingClaim(targetId);
     deviceService.clearPendingClaim(targetId);
+    if (pending) socketService.emitToUser(pending.userId, 'claim:result', { result: 'timeout' });
     logger.info({ deviceId: targetId }, 'Claim request timed out');
   }, 30_000);
 

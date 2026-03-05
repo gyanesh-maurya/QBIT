@@ -19,6 +19,8 @@ export default function ClaimDialog({ device, apiUrl, onClose, onClaimed, socket
       if (data.result === 'accepted') {
         onClaimed();
         onClose();
+      } else if (data.result === 'timeout') {
+        onClose();
       } else if (data.result === 'rejected') {
         setStatus('error');
         setErrorMsg('Claim was declined on device');
@@ -73,7 +75,7 @@ export default function ClaimDialog({ device, apiUrl, onClose, onClaimed, socket
 
         {status === 'pending' ? (
           <div className="claim-pending">
-            <div className="claim-pending-icon">&#8987;</div>
+            <div className="claim-pending-icon material-symbols-outlined" aria-hidden>hourglass_empty</div>
             <p>Waiting for confirmation on device.</p>
             <p className="claim-pending-hint">Long-press the QBIT button to confirm.</p>
           </div>

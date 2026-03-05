@@ -55,12 +55,9 @@ export default function AddFriendDialog({ device, apiUrl, onClose }: Props) {
 
         {status === 'pending' ? (
           <div className="claim-pending">
-            <div className="claim-pending-icon">&#8987;</div>
+            <div className="claim-pending-icon material-symbols-outlined" aria-hidden>hourglass_empty</div>
             <p>Waiting for owner to confirm on device.</p>
             <p className="claim-pending-hint">Long-press the QBIT button to confirm.</p>
-            <button type="button" className="btn btn-ghost" style={{ marginTop: 12 }} onClick={onClose}>
-              Close
-            </button>
           </div>
         ) : (
           <>

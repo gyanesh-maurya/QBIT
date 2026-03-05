@@ -169,42 +169,12 @@ export default function App() {
     });
 
     s.on('friends:update', () => {
-      const hadPending = addFriendDeviceRef.current !== null;
       setAddFriendDevice(null);
       fetchFriendsRef.current();
-      if (hadPending) {
-        const id = ++notificationIdRef.current;
-        setNotifications((prev) => {
-          const next = [...prev, { id, from: 'QBIT', text: 'Friends list updated.', exiting: false }];
-          return next.slice(-3);
-        });
-        setTimeout(() => {
-          setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, exiting: true } : n)));
-          setTimeout(() => setNotifications((prev) => prev.filter((n) => n.id !== id)), 300);
-        }, 4000);
-      }
     });
 
-    s.on('friend_request:result', (data: { result: string }) => {
+    s.on('friend_request:result', () => {
       setAddFriendDevice(null);
-      if (data.result === 'rejected' || data.result === 'timeout' || data.result === 'cancelled') {
-        const id = ++notificationIdRef.current;
-        const text = data.result === 'rejected'
-          ? 'Friend request was declined.'
-          : data.result === 'timeout'
-            ? 'Friend request timed out.'
-            : 'Friend request was cancelled.';
-        setNotifications((prev) => {
-          const next = [...prev, { id, from: 'QBIT', text, exiting: false }];
-          return next.slice(-3);
-        });
-        setTimeout(() => {
-          setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, exiting: true } : n)));
-          setTimeout(() => {
-            setNotifications((prev) => prev.filter((n) => n.id !== id));
-          }, 300);
-        }, 5000);
-      }
     });
 
     s.on('poke', (data: { from: string; text: string }) => {

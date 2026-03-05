@@ -260,7 +260,7 @@ export default function PokeDialog({
                         const displayName = online?.displayName ?? 'Friend';
                         return (
                           <li key={publicUserId} className="poke-friends-item">
-                            <span className="poke-friends-name">{displayName}</span>
+                            <span className="poke-friends-name" title={displayName}>{displayName}</span>
                             {onRemoveFriend && (
                               <button
                                 type="button"

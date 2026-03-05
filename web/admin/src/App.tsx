@@ -1311,7 +1311,9 @@ export default function App() {
             <div className="admin-confirm-dialog admin-report-detail-dialog" onClick={(e) => e.stopPropagation()}>
               <p id="admin-report-detail-title" className="admin-confirm-text">Report #{reportDetail.id}</p>
               <p className="admin-report-detail-meta">
-                {reportDetail.reporterName ?? reportDetail.reporterUserId} → {reportDetail.reportedUserName ?? reportDetail.reportedUserId}
+                {reportDetail.reporterName ?? reportDetail.reporterUserId}
+                <span className="admin-report-detail-arrow material-symbols-outlined" aria-hidden>arrow_forward</span>
+                {reportDetail.reportedUserName ?? reportDetail.reportedUserId}
                 {' · '}{new Date(reportDetail.createdAt).toLocaleString()}
               </p>
               <div className="admin-report-detail-desc">{reportDetail.description}</div>

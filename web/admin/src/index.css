@@ -968,6 +968,15 @@ body {
   font-size: 0.875rem;
   color: var(--text-muted);
   margin: 0 0 12px 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.admin-report-detail-arrow {
+  font-size: 1em;
+  color: var(--text-muted);
+  flex-shrink: 0;
 }
 .admin-report-detail-desc {
   font-size: 0.95rem;
