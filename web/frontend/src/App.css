@@ -444,11 +444,35 @@ body {
   padding: 24px;
   width: 380px;
   max-width: 90vw;
+  display: flex;
+  flex-direction: column;
+  max-height: min(85vh, 100dvh - 32px);
+  overflow: hidden;
+}
+.poke-dialog-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.poke-dialog-body::-webkit-scrollbar {
+  width: 6px;
+}
+.poke-dialog-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+.poke-dialog-body::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
 }
 /* Offset dialog on mobile so it does not overlap the tapped bubble */
 @media (max-width: 640px) {
   .poke-dialog-offset {
     margin-bottom: 25vh;
+  }
+  .poke-dialog {
+    max-height: min(75vh, 100dvh - 48px);
   }
 }
 
@@ -457,6 +481,7 @@ body {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 20px;
+  flex-shrink: 0;
 }
 
 .poke-title {

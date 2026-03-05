@@ -182,7 +182,7 @@ export default function PokeDialog({
             &times;
           </button>
         </div>
-
+        <div className="poke-dialog-body">
         {!isLoggedIn ? (
           <div className="poke-login-msg">
             <a href={`${apiUrl}/auth/google`}>Login</a> to send a poke.
@@ -313,6 +313,7 @@ export default function PokeDialog({
             )}
           </>
         )}
+        </div>
       </div>
     </div>
   );
