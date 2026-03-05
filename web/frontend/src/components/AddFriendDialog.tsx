@@ -55,7 +55,12 @@ export default function AddFriendDialog({ device, apiUrl, onClose }: Props) {
 
         {status === 'pending' ? (
           <div className="claim-pending">
-            <div className="claim-pending-icon material-symbols-outlined" aria-hidden>hourglass_empty</div>
+            <div className="claim-pending-icon claim-pending-spinner" aria-hidden>
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                <circle cx="12" cy="12" r="10" strokeOpacity="0.25" />
+                <path d="M12 2a10 10 0 0 1 10 10" strokeOpacity="1" />
+              </svg>
+            </div>
             <p>Waiting for owner to confirm on device.</p>
             <p className="claim-pending-hint">Long-press the QBIT button to confirm.</p>
           </div>

@@ -753,36 +753,44 @@ body {
 }
 
 .claim-pending {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   text-align: center;
-  padding: 20px 0;
+  padding: 24px 0 20px;
+  gap: 14px;
 }
 
 .claim-pending-icon {
-  font-size: 2.5em;
-  margin-bottom: 12px;
-  opacity: 0.6;
+  flex-shrink: 0;
+  margin-bottom: 0;
+  opacity: 0.7;
 }
-.claim-pending-icon.material-symbols-outlined {
-  font-family: 'Material Symbols Outlined';
-  font-weight: normal;
-  font-style: normal;
-  font-size: 2.5em;
-  line-height: 1;
-  letter-spacing: normal;
+.claim-pending-spinner {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  color: var(--text-muted);
+}
+.claim-pending-spinner svg {
+  display: block;
+  animation: claim-pending-spin 0.8s linear infinite;
+}
+@keyframes claim-pending-spin {
+  to { transform: rotate(360deg); }
 }
 
 .claim-pending p {
   color: var(--text-secondary);
   font-size: 0.9em;
-  margin-bottom: 8px;
+  margin: 0;
+  line-height: 1.4;
 }
 
 .claim-pending-hint {
   color: var(--text-muted);
   font-size: 0.82em;
+  margin: 0;
 }
 
 .claim-error {
