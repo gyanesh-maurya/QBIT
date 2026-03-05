@@ -720,6 +720,17 @@ body {
   padding: 6px 0;
   font-size: 0.9em;
 }
+.poke-friends-pill {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 14px 6px 6px;
+  border-radius: 999px;
+  background: var(--bg-accent);
+  border: 1px solid var(--border);
+  min-width: 0;
+  flex: 1;
+}
 .poke-friends-avatar {
   width: 28px;
   height: 28px;
@@ -729,29 +740,30 @@ body {
 }
 .poke-friends-avatar-placeholder {
   display: inline-block;
-  background: var(--bg-accent);
+  background: var(--bg);
   border: 1px solid var(--border);
 }
 .poke-friends-name {
-  display: inline-block;
-  padding: 6px 14px;
-  border-radius: 999px;
-  background: var(--bg-accent);
-  border: 1px solid var(--border);
+  flex: 1;
+  text-align: left;
   color: var(--text-primary);
   font-size: 0.9em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .poke-friends-remove {
-  padding: 4px 10px;
+  padding: 6px 14px;
   font-size: 0.85em;
-  background: none;
+  background: var(--bg-accent);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 999px;
   color: var(--text-muted);
   cursor: pointer;
+  flex-shrink: 0;
 }
 .poke-friends-remove:hover {
-  background: var(--bg-accent);
+  background: var(--bg);
   color: var(--text-primary);
   border-color: var(--text-muted);
 }

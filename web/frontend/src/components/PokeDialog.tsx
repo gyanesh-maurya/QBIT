@@ -267,12 +267,14 @@ export default function PokeDialog({
                         const avatarUrl = friendAvatars[publicUserId] || online?.avatar;
                         return (
                           <li key={publicUserId} className="poke-friends-item">
-                            {avatarUrl ? (
-                              <img src={avatarUrl} alt="" className="poke-friends-avatar" referrerPolicy="no-referrer" />
-                            ) : (
-                              <span className="poke-friends-avatar poke-friends-avatar-placeholder" aria-hidden />
-                            )}
-                            <span className="poke-friends-name" title={displayName}>{displayName}</span>
+                            <div className="poke-friends-pill">
+                              {avatarUrl ? (
+                                <img src={avatarUrl} alt="" className="poke-friends-avatar" referrerPolicy="no-referrer" />
+                              ) : (
+                                <span className="poke-friends-avatar poke-friends-avatar-placeholder" aria-hidden />
+                              )}
+                              <span className="poke-friends-name" title={displayName}>{displayName}</span>
+                            </div>
                             {onRemoveFriend && (
                               <button
                                 type="button"
