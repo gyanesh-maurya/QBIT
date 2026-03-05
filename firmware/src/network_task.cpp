@@ -233,7 +233,10 @@ static void wsMessage(WebsocketsClient &client, WebsocketsMessage message) {
                     evt.textBmp = tBmp;
                     evt.textBmpWidth = textW;
                     evt.textBmpLen = tLen;
-                    xQueueSend(networkEventQueue, &evt, pdMS_TO_TICKS(100));
+                    if (xQueueSend(networkEventQueue, &evt, pdMS_TO_TICKS(100)) != pdTRUE) {
+                        free(sBmp);
+                        free(tBmp);
+                    }
                 } else {
                     if (sBmp) free(sBmp);
                     if (tBmp) free(tBmp);
@@ -297,7 +300,10 @@ static void wsMessage(WebsocketsClient &client, WebsocketsMessage message) {
                     evt.textBmp = tBmp;
                     evt.textBmpWidth = textW;
                     evt.textBmpLen = tLen;
-                    xQueueSend(networkEventQueue, &evt, pdMS_TO_TICKS(100));
+                    if (xQueueSend(networkEventQueue, &evt, pdMS_TO_TICKS(100)) != pdTRUE) {
+                        free(sBmp);
+                        free(tBmp);
+                    }
                 } else {
                     if (sBmp) free(sBmp);
                     if (tBmp) free(tBmp);

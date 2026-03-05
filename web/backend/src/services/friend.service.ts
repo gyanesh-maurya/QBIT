@@ -48,15 +48,15 @@ export function setPublicFriends(userId: string, value: boolean): void {
   stmtSetSettings.run(userId, onlyFriendsCanPoke ? 1 : 0, value ? 1 : 0);
 }
 
-/** Friend pairs where both users have publicFriends enabled. */
+/** Friend pairs where both users have publicFriends enabled. No settings row = public (same as getPublicFriends). */
 export function getPublicFriendPairs(): Array<{ a: string; b: string }> {
   const all = getAllFriendPairs();
-  const publicSet = new Set<string>();
-  const stmt = db.prepare('SELECT userId FROM user_settings WHERE publicFriends = 1');
+  const privateSet = new Set<string>();
+  const stmt = db.prepare('SELECT userId FROM user_settings WHERE publicFriends = 0');
   for (const r of (stmt.all() as Array<{ userId: string }>)) {
-    publicSet.add(r.userId);
+    privateSet.add(r.userId);
   }
-  return all.filter(({ a, b }) => publicSet.has(a) && publicSet.has(b));
+  return all.filter(({ a, b }) => !privateSet.has(a) && !privateSet.has(b));
 }
 
 export function addFriend(userIdA: string, userIdB: string): void {
