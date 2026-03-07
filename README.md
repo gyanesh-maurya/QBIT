@@ -65,6 +65,35 @@
 
 QBIT is a retro robot-style desk companion that works like a personal BB call. Once connected to the [QBIT Network](https://qbit.labxcloud.com), anyone can [poke](#poke) your QBIT and send it messages; you can also connect and interact with other QBITs on the network. When idle, QBIT shows random expressions that change with its mood. You can browse the [Library](#library) to download community-uploaded custom animations and [upload them to your own device](#device-dashboard). QBIT integrates with [Home Assistant via MQTT](#mqtt--home-assistant)—Home Assistant can read the poke message and trigger different automations based on the content. Here is a [simple example](https://www.youtube.com/shorts/C_3Uz9TOPBY); feel free to share your own setups. XD
 
+### On-Device Features
+
+**Clock Display**
+- Double-tap the touch sensor to show the current time and date on the OLED screen; tap again to browse notification history
+- Supports both **12-hour** and **24-hour** format — switchable from the on-device settings menu
+
+**Animation Playback**
+- Plays `.qgif` animations in shuffle mode from the device's local storage
+- Animations change automatically while QBIT is idle
+
+**On-Device Settings Menu**
+Access the settings menu with a long press. Tap to scroll, long press to enter or toggle. The menu auto-exits after 10 seconds without input. Changes take effect after selecting **[ SAVE ]**.
+
+| Setting | Description |
+|---|---|
+| QBIT Sound | Turn buzzer on or off (animations and touch feedback) |
+| GIF Invert | Invert the pixel colours of all animations |
+| Flip Mode | Rotate the display 180° (default orientation is 180°) |
+| Clock Format | Toggle between 12-hour and 24-hour time format |
+
+**Poke Notifications**
+- Receive poke messages from other QBIT users on the network
+- The sender's name and message appear on-screen with a timestamp
+- Poke notifications support various languages: the bitmap is rendered on the web before being sent to the device, so any language can be displayed
+- Double-tap to show the clock; tap again to browse notification history
+
+**Offline Indicator**
+- QBIT displays a visual indicator when it loses its internet connection
+
 ---
 
 ## Hardware Requirements

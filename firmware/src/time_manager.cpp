@@ -132,8 +132,12 @@ String timeManagerGetFormatted() {
     time_t now = time(nullptr);
     struct tm timeinfo;
     localtime_r(&now, &timeinfo);
-    char buf[6];
-    strftime(buf, sizeof(buf), "%H:%M", &timeinfo);
+    char buf[12];
+    if (getTimeFormat24h()) {
+        strftime(buf, sizeof(buf), "%H:%M", &timeinfo);
+    } else {
+        strftime(buf, sizeof(buf), "%I:%M %p", &timeinfo);
+    }
     return String(buf);
 }
 

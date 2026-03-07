@@ -45,6 +45,21 @@ static bool     _mqttEnabled = false;
 // Timezone
 static String  _tzIANA;
 
+
+// Display orientation / GIF options
+static bool _flipMode        = true;
+static bool _negativeGif     = false;
+
+// Time format: true = 24h, false = 12h
+static bool _timeFormat24h   = true;
+
+// ==========================================================================
+//  Time format (24h/12h)
+// ==========================================================================
+bool getTimeFormat24h() { return _timeFormat24h; }
+void setTimeFormat24h(bool val) { _timeFormat24h = val; }
+
+
 // ==========================================================================
 //  Device identity
 // ==========================================================================
@@ -129,6 +144,12 @@ void loadSettings() {
         _tzIANA = _tzIANA.substring(0, TZ_IANA_MAX_LEN);
     }
 
+    // Display / GIF options
+
+    _flipMode      = _prefs.getBool("flipMode",  true);
+    _negativeGif   = _prefs.getBool("negGif",    false);
+    _timeFormat24h = _prefs.getBool("time24h",   true);
+
     xSemaphoreGive(_prefsMutex);
 
     // Apply speed
@@ -163,6 +184,9 @@ void saveSettings() {
     _prefs.putUChar("pinSDA",    _pinSDA);
     _prefs.putUChar("pinSCL",    _pinSCL);
     _prefs.putString("tzName",   _tzIANA);
+    _prefs.putBool("flipMode",   _flipMode);
+    _prefs.putBool("negGif",     _negativeGif);
+    _prefs.putBool("time24h",    _timeFormat24h);
     xSemaphoreGive(_prefsMutex);
     Serial.println("Settings saved to NVS");
 }
@@ -212,6 +236,18 @@ uint8_t getBuzzerVolume() { return _buzzerVolume; }
 
 uint8_t getSavedVolume() { return _savedVolume; }
 void    setSavedVolume(uint8_t vol) { _savedVolume = vol; }
+
+// ==========================================================================
+//  Flip mode
+// ==========================================================================
+bool getFlipMode()         { return _flipMode; }
+void setFlipMode(bool val) { _flipMode = val; }
+
+// ==========================================================================
+//  Negative GIF
+// ==========================================================================
+bool getNegativeGif()         { return _negativeGif; }
+void setNegativeGif(bool val) { _negativeGif = val; }
 
 // ==========================================================================
 //  Playback speed

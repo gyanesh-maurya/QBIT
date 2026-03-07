@@ -30,7 +30,7 @@
 #define CLAIM_TIMEOUT_MS     30000
 #define CLAIM_LONG_PRESS_MS  2000
 #define HISTORY_IDLE_MS      3000
-#define MUTE_FEEDBACK_MS     2000
+#define SETTINGS_MENU_IDLE_MS 10000
 #define OFFLINE_OVERLAY_MS   2000
 #define UPDATE_PROMPT_MS     8000
 // Must match network_task WIFI_RECONNECT_TIMEOUT_MS (AP portal starts after this)
@@ -74,6 +74,19 @@ static uint8_t _lastWifiConnSec = 0xFF;
 // Melody tracking
 static bool _melodyWasPlaying = false;
 
+// Settings menu
+static uint8_t _settingsCursor    = 0;
+static bool    _settingsConfirming = false;
+static bool    _settingsSelected   = false;  // row is "entered" via hold
+
+struct SettingsPending {
+    bool gifSound;
+    bool negativeGif;
+    bool flipMode;
+    bool timeFormat24h;
+};
+static SettingsPending _settingsPending;
+
 // ==========================================================================
 //  State transition helper
 // ==========================================================================
@@ -82,6 +95,101 @@ static void enterState(DisplayState newState) {
     _prevState = _state;
     _state = newState;
     _stateEntryMs = millis();
+}
+
+// ==========================================================================
+//  Settings menu renderer
+// ==========================================================================
+
+static void drawSettingsMenu() {
+    // 6 items: 4 toggles + Save + Exit
+    // Show 4 rows at a time; scroll window follows cursor
+    static const char *labels[6] = {
+        "QBIT Sound", "GIF Invert", "Flip Mode", "Clock Format",
+        "[ SAVE ]", "[ EXIT ]"
+    };
+    bool vals[6] = {
+        _settingsPending.gifSound,
+        _settingsPending.negativeGif,
+        _settingsPending.flipMode,
+        _settingsPending.timeFormat24h,
+        false, false
+    };
+
+    // Scroll window: keep cursor visible (4 rows visible, 6 total)
+    uint8_t top = 0;
+    if (_settingsCursor >= 4) top = _settingsCursor - 3;
+
+    u8g2.clearBuffer();
+    u8g2.setFont(u8g2_font_6x13_tr);
+
+    for (uint8_t row = 0; row < 4; row++) {
+        uint8_t item = top + row;
+        if (item >= 6) break;
+
+        uint8_t y = (row + 1) * 15;  // y baseline: 15, 30, 45, 60
+        bool isSelected = (item == _settingsCursor);
+
+        // Cursor row: full row inverted
+        if (isSelected) {
+            u8g2.setDrawColor(1);
+            u8g2.drawBox(0, y - 12, 128, 14);
+            u8g2.setDrawColor(0);
+        } else {
+            u8g2.setDrawColor(1);
+        }
+
+        if (item >= 4) {
+            uint8_t w = u8g2.getStrWidth(labels[item]);
+            u8g2.drawStr((128 - (int16_t)w) / 2, y, labels[item]);
+        } else {
+            const char *val;
+            uint8_t badgeW = 20;
+            int16_t badgeX;
+            if (item == 3) {
+                val     = vals[item] ? "24h" : "12h";
+                badgeW  = 24;
+                badgeX  = (int16_t)128 - (int16_t)badgeW - 2 + 4;
+            } else {
+                val    = vals[item] ? "ON " : "OFF";
+                badgeX = (int16_t)128 - (int16_t)badgeW - 2;
+            }
+            badgeX -= 6;
+            bool entered = isSelected && _settingsSelected;
+
+            char labelBuf[20];
+            snprintf(labelBuf, sizeof(labelBuf), "%-13s", labels[item]);
+            u8g2.drawStr(6, y, labelBuf);
+
+            uint8_t boxW = (uint8_t)((int16_t)128 - badgeX + 1);
+            if (boxW > badgeW + 2) boxW = badgeW + 2;
+            if (entered) {
+                u8g2.setDrawColor(0);
+                u8g2.drawBox((int16_t)badgeX - 1, y - 12, boxW, 14);
+                u8g2.setDrawColor(1);
+                u8g2.drawStr((uint8_t)badgeX, y, val);
+                u8g2.setDrawColor(0);
+            } else {
+                u8g2.drawStr((uint8_t)badgeX, y, val);
+            }
+        }
+    }
+
+    u8g2.setDrawColor(1);
+    rotateBuffer180();
+    u8g2.sendBuffer();
+}
+
+static void enterSettingsMenu() {
+    _settingsCursor     = 0;
+    _settingsConfirming = false;
+    _settingsSelected   = false;
+    _settingsPending    = { getBuzzerVolume() > 0,
+                            getNegativeGif(),
+                            getFlipMode(),
+                            getTimeFormat24h() };
+    enterState(SETTINGS_MENU);
+    drawSettingsMenu();
 }
 
 // Terminal-style countdown: title, blank line, "AP in Xs", progress bar. Countdown starts when network declares connection lost.
@@ -115,37 +223,6 @@ static void showWifiConnectingProgress(unsigned long nowMs) {
 }
 
 // ==========================================================================
-//  Mute toggle helper (called from any state that supports LONG_PRESS)
-// ==========================================================================
-
-static void doMuteToggle() {
-    enterState(MUTE_FEEDBACK);
-    bool wasMuted = (getBuzzerVolume() == 0);
-    if (wasMuted) {
-        uint8_t saved = getSavedVolume();
-        setBuzzerVolume(saved > 0 ? saved : 100);
-        showText("", "[ UNMUTED ]", "", "");
-        noTone(getPinBuzzer());
-        rtttl::begin(getPinBuzzer(), UNMUTE_MELODY);
-    } else {
-        // Play mute melody BEFORE muting
-        noTone(getPinBuzzer());
-        rtttl::begin(getPinBuzzer(), MUTE_MELODY);
-        while (rtttl::isPlaying()) {
-            rtttl::play();
-            vTaskDelay(pdMS_TO_TICKS(1));
-        }
-        noTone(getPinBuzzer());
-        setSavedVolume(getBuzzerVolume());
-        setBuzzerVolume(0);
-        showText("", "[ MUTED ]", "", "");
-    }
-    // Reset timer so feedback text shows for the full MUTE_FEEDBACK_MS
-    _stateEntryMs = millis();
-    mqttPublishMuteState(!wasMuted);
-}
-
-// ==========================================================================
 //  Show poke history entry (bitmap or text fallback)
 // ==========================================================================
 
@@ -156,11 +233,16 @@ static void showPokeHistoryEntry(uint8_t index) {
         return;
     }
 
-    // Format header: [ MM/DD HH:MM:SS ]
-    char timeBuf[24];
+
+    // Format header: [ MM/DD HH:MM ]
+    char timeBuf[32];
     struct tm ti;
     localtime_r(&rec->timestamp, &ti);
-    strftime(timeBuf, sizeof(timeBuf), "[ %m/%d %H:%M:%S ]", &ti);
+    if (getTimeFormat24h()) {
+        strftime(timeBuf, sizeof(timeBuf), "[ %m/%d %H:%M ]", &ti);
+    } else {
+        strftime(timeBuf, sizeof(timeBuf), "[ %m/%d %I:%M %p ]", &ti);
+    }
 
     _historyScrollOffset = 0;
     _historyLastScrollMs = millis();
@@ -258,7 +340,7 @@ void displayTask(void *param) {
         if (xQueueReceive(networkEventQueue, &netEvt, 0) == pdTRUE) {
             switch (netEvt.kind) {
                 case NetworkEvent::POKE:
-                    if (_state != CLAIM_PROMPT && _state != FRIEND_PROMPT && _state != MUTE_FEEDBACK) {
+                    if (_state != CLAIM_PROMPT && _state != FRIEND_PROMPT) {
                         // Avoid overwriting custom poke text with generic "Poke!" (e.g. from HA button when text entity was used)
                         const char *cur = pokeGetCurrentMessage();
                         if (cur && _state == POKE_DISPLAY && strcmp(netEvt.text, "Poke!") == 0 && strcmp(cur, "Poke!") != 0) {
@@ -274,7 +356,7 @@ void displayTask(void *param) {
                     break;
 
                 case NetworkEvent::POKE_BITMAP:
-                    if (_state != CLAIM_PROMPT && _state != FRIEND_PROMPT && _state != MUTE_FEEDBACK) {
+                    if (_state != CLAIM_PROMPT && _state != FRIEND_PROMPT) {
                         const char *tit = netEvt.title[0] ? netEvt.title : nullptr;
                         handlePokeBitmapFromPtrs(
                             netEvt.sender, netEvt.text,
@@ -417,18 +499,40 @@ void displayTask(void *param) {
                                 String timeStr = timeManagerGetFormatted();
                                 String dateStr = timeManagerGetDateFormatted();
                                 u8g2.clearBuffer();
+                                String timePart = timeStr;
+                                String ampmPart;
+                                if (!getTimeFormat24h()) {
+                                    int sp = timeStr.indexOf(" AM");
+                                    if (sp < 0) sp = timeStr.indexOf(" PM");
+                                    if (sp < 0) { sp = timeStr.indexOf("AM"); if (sp < 0) sp = timeStr.indexOf("PM"); }
+                                    if (sp >= 0) {
+                                        timePart = timeStr.substring(0, sp);
+                                        ampmPart = timeStr.substring(sp);
+                                    }
+                                }
                                 u8g2.setFont(u8g2_font_logisoso28_tn);
-                                uint8_t tw = u8g2.getStrWidth(timeStr.c_str());
-                                u8g2.drawStr((128 - tw) / 2, 38, timeStr.c_str());
+                                int16_t tw = (int16_t)u8g2.getStrWidth(timePart.c_str());
+                                int16_t tx = (128 - tw) / 2;
+                                if (tx < 0) tx = 0;
+                                u8g2.drawStr((uint8_t)tx, 38, timePart.c_str());
                                 u8g2.setFont(u8g2_font_6x13_tr);
                                 uint8_t dw = u8g2.getStrWidth(dateStr.c_str());
-                                u8g2.drawStr((128 - dw) / 2, 58, dateStr.c_str());
+                                if (ampmPart.length() > 0) {
+                                    uint8_t aw = u8g2.getStrWidth(ampmPart.c_str());
+                                    int16_t line2W = (int16_t)dw + 4 + (int16_t)aw;
+                                    int16_t line2X = (128 - line2W) / 2;
+                                    if (line2X < 0) line2X = 0;
+                                    u8g2.drawStr((uint8_t)line2X, 58, dateStr.c_str());
+                                    u8g2.drawStr((uint8_t)(line2X + dw + 4), 58, ampmPart.c_str());
+                                } else {
+                                    u8g2.drawStr((128 - dw) / 2, 58, dateStr.c_str());
+                                }
                                 rotateBuffer180();
                                 u8g2.sendBuffer();
                             }
                             break;
                         case LONG_PRESS:
-                            doMuteToggle();
+                            enterSettingsMenu();
                             break;
                         default:
                             break;
@@ -470,7 +574,7 @@ void displayTask(void *param) {
                     } else if (gesture.type == DOUBLE_TAP) {
                         enterState(GIF_PLAYBACK);
                     } else if (gesture.type == LONG_PRESS) {
-                        doMuteToggle();
+                        enterSettingsMenu();
                     }
                     break;
 
@@ -486,7 +590,73 @@ void displayTask(void *param) {
                     } else if (gesture.type == DOUBLE_TAP) {
                         enterState(GIF_PLAYBACK);
                     } else if (gesture.type == LONG_PRESS) {
-                        doMuteToggle();
+                        enterSettingsMenu();
+                    }
+                    break;
+
+                case SETTINGS_MENU:
+                    _stateEntryMs = now;  // reset idle timer on any input (10s auto-exit)
+                    if (_settingsConfirming) {
+                        if (gesture.type == SINGLE_TAP) {
+                            // Confirmed — apply pending values and save
+                            if (_settingsPending.gifSound) {
+                                uint8_t saved = getSavedVolume();
+                                setBuzzerVolume(saved > 0 ? saved : 100);
+                            } else {
+                                if (getBuzzerVolume() > 0) setSavedVolume(getBuzzerVolume());
+                                setBuzzerVolume(0);
+                            }
+                            setNegativeGif(_settingsPending.negativeGif);
+                            setFlipMode(_settingsPending.flipMode);
+                            setTimeFormat24h(_settingsPending.timeFormat24h);
+                            saveSettings();
+                            showText("[ Saved! ]", "", "Settings saved.", "");
+                            vTaskDelay(pdMS_TO_TICKS(1500));
+                            enterState(GIF_PLAYBACK);
+                        } else if (gesture.type == LONG_PRESS) {
+                            // Cancel — back to menu
+                            _settingsConfirming = false;
+                            drawSettingsMenu();
+                        }
+                    } else if (_settingsSelected) {
+                        // A toggle row is entered — TAP toggles, HOLD exits row
+                        if (gesture.type == SINGLE_TAP) {
+                            switch (_settingsCursor) {
+                                case 0: _settingsPending.gifSound = !_settingsPending.gifSound; break;  // Mute toggle
+                                case 1: _settingsPending.negativeGif = !_settingsPending.negativeGif; break;
+                                case 2: _settingsPending.flipMode    = !_settingsPending.flipMode;    break;
+                                case 3: _settingsPending.timeFormat24h = !_settingsPending.timeFormat24h; break;
+                            }
+                            drawSettingsMenu();
+                        } else if (gesture.type == LONG_PRESS) {
+                            // De-select row
+                            _settingsSelected = false;
+                            drawSettingsMenu();
+                        }
+                    } else {
+                        // Browsing mode
+                        if (gesture.type == SINGLE_TAP) {
+                            // Scroll cursor
+                            _settingsCursor = (_settingsCursor + 1) % 6;
+                            drawSettingsMenu();
+                        } else if (gesture.type == LONG_PRESS) {
+                            // Enter/select highlighted row
+                            if (_settingsCursor == 4) {
+                                // Save — ask confirmation
+                                _settingsConfirming = true;
+                                showText("[ Save Settings? ]",
+                                         "",
+                                         "TAP  = confirm",
+                                         "HOLD = cancel");
+                            } else if (_settingsCursor == 5) {
+                                // Exit — discard changes
+                                enterState(GIF_PLAYBACK);
+                            } else {
+                                // Enter toggle row
+                                _settingsSelected = true;
+                                drawSettingsMenu();
+                            }
+                        }
                     }
                     break;
 
@@ -560,13 +730,15 @@ void displayTask(void *param) {
                     static unsigned long updatePromptStartMs = 0;
                     if (updatePromptStartMs == 0) updatePromptStartMs = now;
                     char curLine[32], latLine[32];
-                    // Unify display: both current and latest with leading "v" (add if missing)
-                    snprintf(curLine, sizeof(curLine),
-                        (kQbitVersion[0] == 'v' || kQbitVersion[0] == 'V') ? "Current: %s" : "Current: v%s",
-                        kQbitVersion);
-                    snprintf(latLine, sizeof(latLine),
-                        (updateAvailableVersion[0] == 'v' || updateAvailableVersion[0] == 'V') ? "Latest: %s" : "Latest: v%s",
-                        updateAvailableVersion);
+                    // Add "v" only for semantic versions (e.g. 0.0.0); show dev-build etc as-is
+                    auto fmtCur = (kQbitVersion[0] == 'v' || kQbitVersion[0] == 'V')
+                        ? "Current: %s"
+                        : (kQbitVersion[0] >= '0' && kQbitVersion[0] <= '9') ? "Current: v%s" : "Current: %s";
+                    auto fmtLat = (updateAvailableVersion[0] == 'v' || updateAvailableVersion[0] == 'V')
+                        ? "Latest: %s"
+                        : (updateAvailableVersion[0] >= '0' && updateAvailableVersion[0] <= '9') ? "Latest: v%s" : "Latest: %s";
+                    snprintf(curLine, sizeof(curLine), fmtCur, kQbitVersion);
+                    snprintf(latLine, sizeof(latLine), fmtLat, updateAvailableVersion);
                     showText("[ Update available ]", "", curLine, latLine);
                     if (now - updatePromptStartMs >= UPDATE_PROMPT_MS) {
                         updateAvailable = false;
@@ -639,10 +811,14 @@ void displayTask(void *param) {
                                 if (_historyScrollOffset >= (int16_t)virtualW) {
                                     _historyScrollOffset -= (int16_t)virtualW;
                                 }
-                                char timeBuf[24];
+                                char timeBuf[32];
                                 struct tm ti;
                                 localtime_r(&hRec->timestamp, &ti);
-                                strftime(timeBuf, sizeof(timeBuf), "[ %m/%d %H:%M:%S ]", &ti);
+                                if (getTimeFormat24h()) {
+                                    strftime(timeBuf, sizeof(timeBuf), "[ %m/%d %H:%M ]", &ti);
+                                } else {
+                                    strftime(timeBuf, sizeof(timeBuf), "[ %m/%d %I:%M %p ]", &ti);
+                                }
                                 showPokeHistoryBitmap(hRec, timeBuf, _historyScrollOffset);
                             } else {
                                 if (_historyTextSenderWidth > 128) {
@@ -659,10 +835,14 @@ void displayTask(void *param) {
                                         _historyTextMessageScrollOffset -= (int16_t)vw;
                                     }
                                 }
-                                char timeBuf[24];
+                                char timeBuf[32];
                                 struct tm ti;
                                 localtime_r(&hRec->timestamp, &ti);
-                                strftime(timeBuf, sizeof(timeBuf), "[ %m/%d %H:%M:%S ]", &ti);
+                                if (getTimeFormat24h()) {
+                                    strftime(timeBuf, sizeof(timeBuf), "[ %m/%d %H:%M ]", &ti);
+                                } else {
+                                    strftime(timeBuf, sizeof(timeBuf), "[ %m/%d %I:%M %p ]", &ti);
+                                }
                                 int16_t sr = (_historyTextSenderWidth > 128) ? _historyTextSenderScrollOffset : 0;
                                 int16_t mr = (_historyTextMessageWidth > 128) ? _historyTextMessageScrollOffset : 0;
                                 showPokeHistoryText(hRec, timeBuf, sr, mr);
@@ -672,9 +852,9 @@ void displayTask(void *param) {
                 }
                 break;
 
-            case MUTE_FEEDBACK:
-                if (elapsed >= MUTE_FEEDBACK_MS) {
-                    enterState(_prevState == MUTE_FEEDBACK ? GIF_PLAYBACK : _prevState);
+            case SETTINGS_MENU:
+                if (elapsed >= SETTINGS_MENU_IDLE_MS) {
+                    enterState(GIF_PLAYBACK);
                 }
                 break;
 

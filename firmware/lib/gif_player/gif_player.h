@@ -56,10 +56,11 @@ void gifPlayerSetIdleAnimation(const AnimatedGIF *idle);
 void gifPlayerTick();
 
 // Render a raw 128x64 monochrome bitmap to the display.
-// Applies 8x8 block transpose with colour inversion and 180-degree rotation
-// to match the SSD1306 page-column memory layout.
+// Uses U8G2 drawBitmap(); rotation follows default R0 and flip-mode setting.
+// frameData may be inverted in-place for polarity — caller must not reuse
+// the buffer for another frame without refilling it first.
 // Shared by both the PROGMEM boot animation and file-based playback.
-void gifRenderFrame(U8G2 *display, const uint8_t *frameData,
+void gifRenderFrame(U8G2 *display, uint8_t *frameData,
                     uint16_t width, uint16_t height);
 
 #endif // GIF_PLAYER_H

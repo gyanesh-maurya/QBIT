@@ -62,4 +62,17 @@ void    setTimezoneIANA(const String &tz);
 uint8_t getSavedVolume();
 void    setSavedVolume(uint8_t vol);
 
+
+// --- Flip mode (180 degree software orientation) ---
+bool getFlipMode();
+void setFlipMode(bool val);
+
+// --- Negative GIF (invert GIF pixel polarity) ---
+bool getNegativeGif();
+void setNegativeGif(bool val);
+
+// --- Time format (24h/12h) ---
+bool getTimeFormat24h();
+void setTimeFormat24h(bool val);
+
 #endif // SETTINGS_H
