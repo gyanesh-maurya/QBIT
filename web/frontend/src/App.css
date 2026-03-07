@@ -470,6 +470,7 @@ body {
 @media (max-width: 640px) {
   .poke-dialog-offset {
     margin-bottom: 25vh;
+    margin-top: max(12px, env(safe-area-inset-top, 0px));
   }
   .poke-dialog {
     max-height: min(75vh, 100dvh - 48px);
