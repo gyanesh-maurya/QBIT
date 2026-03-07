@@ -610,6 +610,7 @@ void displayTask(void *param) {
                             setFlipMode(_settingsPending.flipMode);
                             setTimeFormat24h(_settingsPending.timeFormat24h);
                             saveSettings();
+                            mqttPublishMuteState(getBuzzerVolume() == 0);
                             showText("[ Saved! ]", "", "Settings saved.", "");
                             vTaskDelay(pdMS_TO_TICKS(1500));
                             enterState(GIF_PLAYBACK);
