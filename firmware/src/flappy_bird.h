@@ -11,7 +11,7 @@ enum class FlappyGestureType {
 };
 
 enum class FlappyAction {
-    None, Flap, Exit
+    None, Flap
 };
 
 // Reset state and spawn first pipes. Call before entering FLAPPY_RUNNING.

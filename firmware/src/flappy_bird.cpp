@@ -321,7 +321,7 @@ bool flappyTick(unsigned long nowMs) {
             spawnPipe(_pipes[i], spawnX);
         }
 
-        // Score: pipe fully passes birgd X
+        // Score: pipe fully passes bird X
         if (!_pipes[i].scored && (_pipes[i].x + FB_PIPE_W) < FB_BIRD_X) {
             _pipes[i].scored = true;
             _score++;
