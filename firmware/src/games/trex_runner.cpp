@@ -1,5 +1,5 @@
 // T-Rex Runner (assets: t_rex_runner_assets.h)
-#include "game_runner.h"
+#include "trex_runner.h"
 #include "app_state.h"
 #include "display_helpers.h"
 #include "t_rex_runner_assets.h"
@@ -98,7 +98,7 @@ static uint16_t  _randState   = 1;
 static uint8_t   _respawnWait[2] = { 0, 0 };
 static uint32_t  _gameTicks = 0;
 
-static uint16_t gameRand() {
+static uint16_t trexRand() {
     if (_randState == 0) _randState = 1;
     _randState ^= _randState << 7;
     _randState ^= _randState >> 9;
@@ -107,7 +107,7 @@ static uint16_t gameRand() {
 }
 
 static void spawnObstacle(Obstacle &o, uint8_t selfIdx) {
-    uint16_t r = gameRand();
+    uint16_t r = trexRand();
     int16_t minX = 128 + MIN_GAP;
     for (uint8_t j = 0; j < 2; j++) {
         if (j != selfIdx && _obs[j].type != OBS_NONE && _obs[j].x < 200)
@@ -136,7 +136,7 @@ static int16_t obstacleH(ObstacleType t) {
     return 26;
 }
 
-void gameRunnerEnter() {
+void trexRunnerEnter() {
     _randState   = (uint16_t)(millis() & 0xFFFF) | 1;
     _trexY       = GAME_GROUND_Y;
     _velY        = 0;
@@ -148,7 +148,7 @@ void gameRunnerEnter() {
     _groundTileX[0] = GROUND_REARM_X;
     _groundTileX[1] = 61;
     _groundTileX[2] = -3;
-    for (uint8_t i = 0; i < NUM_GROUND_TILES; i++) _groundTileIdx[i] = (uint8_t)(gameRand() % 5);
+    for (uint8_t i = 0; i < NUM_GROUND_TILES; i++) _groundTileIdx[i] = (uint8_t)(trexRand() % 5);
     _score       = 0;
     _speed       = GAME_SPEED_INIT;
     _lastTickMs  = millis();
@@ -170,12 +170,12 @@ static void drawGround() {
     }
 }
 
-void gameRunnerDrawFrame(unsigned long nowMs) {
+void trexRunnerDrawFrame(unsigned long nowMs) {
     u8g2.clearBuffer();
     u8g2.setDrawColor(1);
 
     char hud[24];
-    snprintf(hud, sizeof(hud), "HI %05lu %05lu", (unsigned long)getGameHighScore(), (unsigned long)_score);
+    snprintf(hud, sizeof(hud), "HI %05lu %05lu", (unsigned long)getTrexHighScore(), (unsigned long)_score);
     u8g2.setFont(u8g2_font_6x10_tr);
     uint8_t hudW = u8g2.getStrWidth(hud);
     u8g2.drawStr((int16_t)(128 - hudW - 4), 10, hud);
@@ -215,14 +215,14 @@ void gameRunnerDrawFrame(unsigned long nowMs) {
     u8g2.sendBuffer();
 }
 
-void gameRunnerDrawGameOver() {
+void trexRunnerDrawGameOver() {
     u8g2.clearBuffer();
     u8g2.setFont(u8g2_font_6x13_tr);
     const char *hdr = "[ T-Rex Runner ]";
     u8g2.drawStr((128 - u8g2.getStrWidth(hdr)) / 2, 13, hdr);
     char scoreLine[20], bestLine[20];
     snprintf(scoreLine, sizeof(scoreLine), "Score: %05lu", (unsigned long)_score);
-    snprintf(bestLine,  sizeof(bestLine),  "Best:  %05lu", (unsigned long)getGameHighScore());
+    snprintf(bestLine,  sizeof(bestLine),  "Best:  %05lu", (unsigned long)getTrexHighScore());
     u8g2.drawStr((128 - u8g2.getStrWidth(scoreLine)) / 2, 32, scoreLine);
     u8g2.drawStr((128 - u8g2.getStrWidth(bestLine))  / 2, 46, bestLine);
     const char *hint = "TAP=retry  HOLD=exit";
@@ -231,13 +231,13 @@ void gameRunnerDrawGameOver() {
     u8g2.sendBuffer();
 }
 
-GameRunnerAction gameRunnerOnGesture(GameRunnerGestureType g) {
-    if (g == GameRunnerGestureType::TouchDown) return GameRunnerAction::Duck;
-    if (g == GameRunnerGestureType::TouchUp) return GameRunnerAction::Jump;
-    if (g == GameRunnerGestureType::SingleTap) return GameRunnerAction::None;
-    if (g == GameRunnerGestureType::DoubleTap) return GameRunnerAction::None;
-    if (g == GameRunnerGestureType::LongPress) return GameRunnerAction::None;
-    return GameRunnerAction::None;
+TrexRunnerAction trexRunnerOnGesture(TrexRunnerGestureType g) {
+    if (g == TrexRunnerGestureType::TouchDown) return TrexRunnerAction::Duck;
+    if (g == TrexRunnerGestureType::TouchUp) return TrexRunnerAction::Jump;
+    if (g == TrexRunnerGestureType::SingleTap) return TrexRunnerAction::None;
+    if (g == TrexRunnerGestureType::DoubleTap) return TrexRunnerAction::None;
+    if (g == TrexRunnerGestureType::LongPress) return TrexRunnerAction::None;
+    return TrexRunnerAction::None;
 }
 
 static bool trexAABB(int16_t tx, int16_t ty, uint8_t tw, uint8_t th, bool trexDuck,
@@ -255,7 +255,7 @@ static bool trexAABB(int16_t tx, int16_t ty, uint8_t tw, uint8_t th, bool trexDu
     return tRight >= oLeft && tLeft <= oRight && tBottom >= oTop && tTop <= oBottom;
 }
 
-bool gameRunnerTick(unsigned long nowMs) {
+bool trexRunnerTick(unsigned long nowMs) {
     if (nowMs - _lastTickMs < GAME_TICK_MS) return false;
     _lastTickMs = nowMs;
 
@@ -277,7 +277,7 @@ bool gameRunnerTick(unsigned long nowMs) {
         _groundTileX[i] -= _speed;
         if (_groundTileX[i] < -GAME_GROUND_W) {
             _groundTileX[i] = GROUND_REARM_X;
-            _groundTileIdx[i] = (uint8_t)(gameRand() % 5);
+            _groundTileIdx[i] = (uint8_t)(trexRand() % 5);
         }
     }
 
@@ -288,7 +288,7 @@ bool gameRunnerTick(unsigned long nowMs) {
                 _respawnWait[i]--;
             } else {
                 spawnObstacle(_obs[i], i);
-                _respawnWait[i] = RESPAWN_WAIT_MIN + (uint8_t)(gameRand() % RESPAWN_WAIT_RANGE);
+                _respawnWait[i] = RESPAWN_WAIT_MIN + (uint8_t)(trexRand() % RESPAWN_WAIT_RANGE);
             }
         }
     }
@@ -324,9 +324,9 @@ bool gameRunnerTick(unsigned long nowMs) {
     return false;
 }
 
-uint32_t gameRunnerGetScore() { return _score; }
+uint32_t trexRunnerGetScore() { return _score; }
 
-void gameRunnerApplyJump() {
+void trexRunnerApplyJump() {
     if (_onGround && !_dead) {
         _velY = TREX_JUMP_VEL;
         _onGround = false;
@@ -334,6 +334,6 @@ void gameRunnerApplyJump() {
     }
 }
 
-void gameRunnerApplyDuck() { _ducking = true; }
+void trexRunnerApplyDuck() { _ducking = true; }
 
-void gameRunnerApplyRelease() { _ducking = false; }
+void trexRunnerApplyRelease() { _ducking = false; }

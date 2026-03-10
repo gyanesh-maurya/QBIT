@@ -49,8 +49,8 @@ static String  _tzIANA;
 // Display orientation / GIF options
 static bool _flipMode        = true;
 
-// Game high score
-static uint32_t _gameHighScore  = 0;
+// T-Rex Runner high score (stored under key "trexHi")
+static uint32_t _trexHighScore  = 0;
 static uint32_t _flappyHighScore = 0;
 static bool _negativeGif     = false;
 
@@ -150,11 +150,11 @@ void loadSettings() {
 
     // Display / GIF options
 
-    _flipMode      = _prefs.getBool("flipMode",  true);
-    _negativeGif   = _prefs.getBool("negGif",    false);
-    _timeFormat24h = _prefs.getBool("time24h",   true);
-    _gameHighScore   = _prefs.getUInt("gameHi",    0);
-    _flappyHighScore  = _prefs.getUInt("flappyHi",  0);
+    _flipMode        = _prefs.getBool("flipMode",  true);
+    _negativeGif     = _prefs.getBool("negGif",    false);
+    _timeFormat24h   = _prefs.getBool("time24h",   true);
+    _trexHighScore   = _prefs.getUInt("trexHi",    0);
+    _flappyHighScore = _prefs.getUInt("flappyHi",  0);
     xSemaphoreGive(_prefsMutex);
 
     // Apply speed
@@ -192,7 +192,7 @@ void saveSettings() {
     _prefs.putBool("flipMode",   _flipMode);
     _prefs.putBool("negGif",     _negativeGif);
     _prefs.putBool("time24h",    _timeFormat24h);
-    _prefs.putUInt("gameHi",     _gameHighScore);
+    _prefs.putUInt("trexHi",     _trexHighScore);
     _prefs.putUInt("flappyHi",   _flappyHighScore);
     xSemaphoreGive(_prefsMutex);
     Serial.println("Settings saved to NVS");
@@ -299,19 +299,21 @@ void    setTimezoneIANA(const String &tz) {
 }
 
 // ==========================================================================
-//  Game high score
+//  Game high scores
 // ==========================================================================
-uint32_t getGameHighScore()          { return _gameHighScore; }
-void     setGameHighScore(uint32_t s) {
-    if (s > _gameHighScore) {
-        _gameHighScore = s;
+// T-Rex Runner
+uint32_t getTrexHighScore()          { return _trexHighScore; }
+void     setTrexHighScore(uint32_t s) {
+    if (s > _trexHighScore) {
+        _trexHighScore = s;
         if (_prefsReady && xSemaphoreTake(_prefsMutex, portMAX_DELAY) == pdTRUE) {
-            _prefs.putUInt("gameHi", _gameHighScore);
+            _prefs.putUInt("trexHi", _trexHighScore);
             xSemaphoreGive(_prefsMutex);
         }
     }
 }
-// Flappy Bird high score
+
+// Flappy Bird
 uint32_t getFlappyHighScore()           { return _flappyHighScore; }
 void     setFlappyHighScore(uint32_t s) {
     if (s > _flappyHighScore) {

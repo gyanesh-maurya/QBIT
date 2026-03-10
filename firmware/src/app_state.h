@@ -32,8 +32,8 @@ enum DisplayState {
     GAME_CONTRIBUTE,
     TIMER_SET,
     TIMER_RUNNING,
-    GAME_RUNNING,
-    GAME_OVER,
+    TREX_RUNNING,
+    TREX_OVER,
     FLAPPY_RUNNING,
     FLAPPY_OVER
 };

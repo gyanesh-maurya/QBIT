@@ -13,9 +13,9 @@
 #include "melodies.h"
 #include "gif_player.h"
 #include "timer_ui.h"
-#include "game_menu.h"
-#include "game_runner.h"
-#include "flappy_bird.h"
+#include "games/game_menu.h"
+#include "games/trex_runner.h"
+#include "games/flappy_bird.h"
 
 #include "gif_types.h"
 #include "sys_scx.h"
@@ -93,6 +93,12 @@ struct SettingsPending {
     bool timeFormat24h;
 };
 static SettingsPending _settingsPending;
+
+// Helper: whether current display state is any in-game view
+static bool isGameDisplayState(DisplayState s) {
+    return s == TREX_RUNNING || s == TREX_OVER ||
+           s == FLAPPY_RUNNING || s == FLAPPY_OVER;
+}
 
 // ==========================================================================
 //  State transition helper
@@ -543,8 +549,7 @@ void displayTask(void *param) {
         GestureEvent gesture;
         if (xQueueReceive(gestureQueue, &gesture, 0) == pdTRUE) {
             // Publish to MQTT only when not in game; never publish touch_down/touch_up (low-level press/release)
-            if (_state != GAME_RUNNING && _state != GAME_OVER &&
-                _state != FLAPPY_RUNNING && _state != FLAPPY_OVER &&
+            if (!isGameDisplayState(_state) &&
                 gesture.type != TOUCH_DOWN && gesture.type != TOUCH_UP)
                 mqttPublishTouchEvent(gesture.type);
 
@@ -777,9 +782,9 @@ void displayTask(void *param) {
                         if (ma == GameMenuAction::Scroll) gameMenuDraw();
                         else if (ma == GameMenuAction::Launch0) {
                             updateAvailable = false;
-                            gameRunnerEnter();
-                            enterState(GAME_RUNNING);
-                            gameRunnerDrawFrame();
+                            trexRunnerEnter();
+                            enterState(TREX_RUNNING);
+                            trexRunnerDrawFrame();
                         } else if (ma == GameMenuAction::Launch1) {
                             updateAvailable = false;
                             flappyEnter();
@@ -842,37 +847,37 @@ void displayTask(void *param) {
                     break;
                 }
 
-                case GAME_RUNNING: {
-                    GameRunnerGestureType rg = GameRunnerGestureType::None;
-                    if (gesture.type == TOUCH_DOWN) rg = GameRunnerGestureType::TouchDown;
-                    else if (gesture.type == TOUCH_UP) rg = GameRunnerGestureType::TouchUp;
-                    else if (gesture.type == SINGLE_TAP) rg = GameRunnerGestureType::SingleTap;
-                    else if (gesture.type == DOUBLE_TAP) rg = GameRunnerGestureType::DoubleTap;
-                    else if (gesture.type == LONG_PRESS) rg = GameRunnerGestureType::LongPress;
-                    GameRunnerAction ra = gameRunnerOnGesture(rg);
-                    if (ra == GameRunnerAction::Jump) {
-                        gameRunnerApplyRelease();
-                        gameRunnerApplyJump();
+                case TREX_RUNNING: {
+                    TrexRunnerGestureType rg = TrexRunnerGestureType::None;
+                    if (gesture.type == TOUCH_DOWN) rg = TrexRunnerGestureType::TouchDown;
+                    else if (gesture.type == TOUCH_UP) rg = TrexRunnerGestureType::TouchUp;
+                    else if (gesture.type == SINGLE_TAP) rg = TrexRunnerGestureType::SingleTap;
+                    else if (gesture.type == DOUBLE_TAP) rg = TrexRunnerGestureType::DoubleTap;
+                    else if (gesture.type == LONG_PRESS) rg = TrexRunnerGestureType::LongPress;
+                    TrexRunnerAction ra = trexRunnerOnGesture(rg);
+                    if (ra == TrexRunnerAction::Jump) {
+                        trexRunnerApplyRelease();
+                        trexRunnerApplyJump();
                         if (getBuzzerVolume() > 0) {
                             noTone(getPinBuzzer());
                             rtttl::begin(getPinBuzzer(), TOUCH_MELODY);
                         }
-                    } else if (ra == GameRunnerAction::Duck) {
-                        gameRunnerApplyDuck();
-                    } else if (ra == GameRunnerAction::Exit) {
+                    } else if (ra == TrexRunnerAction::Duck) {
+                        trexRunnerApplyDuck();
+                    } else if (ra == TrexRunnerAction::Exit) {
                         enterState(GIF_PLAYBACK);
-                    } else if (rg == GameRunnerGestureType::TouchUp) {
-                        gameRunnerApplyRelease();
+                    } else if (rg == TrexRunnerGestureType::TouchUp) {
+                        trexRunnerApplyRelease();
                     }
                     break;
                 }
 
-                case GAME_OVER:
+                case TREX_OVER:
                     if (now - _stateEntryMs < 1500) break;
                     if (gesture.type == SINGLE_TAP) {
-                        gameRunnerEnter();
-                        enterState(GAME_RUNNING);
-                        gameRunnerDrawFrame();
+                        trexRunnerEnter();
+                        enterState(TREX_RUNNING);
+                        trexRunnerDrawFrame();
                     } else if (gesture.type == LONG_PRESS) {
                         enterState(GIF_PLAYBACK);
                     }
@@ -1152,20 +1157,20 @@ void displayTask(void *param) {
                 }
                 break;
 
-            case GAME_RUNNING:
-                gameRunnerDrawFrame(now);
-                if (gameRunnerTick(now)) {
-                    setGameHighScore(gameRunnerGetScore());
+            case TREX_RUNNING:
+                trexRunnerDrawFrame(now);
+                if (trexRunnerTick(now)) {
+                    setTrexHighScore(trexRunnerGetScore());
                     if (getBuzzerVolume() > 0) {
                         noTone(getPinBuzzer());
                         rtttl::begin(getPinBuzzer(), MUTE_MELODY);
                     }
-                    enterState(GAME_OVER);
-                    gameRunnerDrawGameOver();
+                    enterState(TREX_OVER);
+                    trexRunnerDrawGameOver();
                 }
                 break;
 
-            case GAME_OVER:
+            case TREX_OVER:
                 // Idle — waiting for gesture
                 break;
 

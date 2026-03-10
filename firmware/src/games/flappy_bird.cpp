@@ -12,9 +12,7 @@
 // --------------------------------------------------------------------------
 //  Constants
 // --------------------------------------------------------------------------
-#define FB_SCREEN_W        128
-#define FB_SCREEN_H        64
-#define FB_GROUND_Y        62      // Y of the ground line (drawn as a line)
+#define FB_GROUND_Y        63      // Y of the ground line (drawn as a line)
 
 #define FB_BIRD_X          18      // fixed left-edge X of bird sprite
 #define FB_BIRD_W          8       // sprite width
@@ -37,9 +35,10 @@
 #define FB_PIPE_OFFSCREEN  (-(FB_PIPE_W + FB_PIPE_CAP_EXT + 1))
 
 #define FB_TICK_MS         40      // ms per game tick (~25 fps)
-#define FB_FLAP_VEL4       (-20)   // upward launch velocity (×4 sub-pixel)
-#define FB_GRAVITY4        3       // gravity added to velY each tick (×4)
-#define FB_TERM_VEL4       22      // terminal downward velocity (×4)
+// Physics tuning: weaker flap + slightly lower gravity for tighter, more controllable arcs.
+#define FB_FLAP_VEL4       (-10)   // upward launch velocity (×4 sub-pixel)
+#define FB_GRAVITY4        2       // gravity added to velY each tick (×4)
+#define FB_TERM_VEL4       20      // terminal downward velocity (×4)
 
 #define FB_SPEED_INIT      2       // initial pipe scroll speed (px/tick)
 #define FB_SPEED_MAX       5       // maximum pipe scroll speed
@@ -69,7 +68,7 @@ static FlappyPipe    _pipes[2];
 static uint16_t      _randState = 1;
 
 // --------------------------------------------------------------------------
-//  Simple XOR-shift RNG (same pattern as game_runner.cpp)
+//  Simple XOR-shift RNG (same pattern as trex_runner.cpp)
 // --------------------------------------------------------------------------
 static uint16_t fbRand() {
     if (_randState == 0) _randState = 1;
@@ -275,7 +274,6 @@ void flappyDrawGameOver() {
 
 FlappyAction flappyOnGesture(FlappyGestureType g) {
     if (g == FlappyGestureType::TouchUp) return FlappyAction::Flap;
-    if (g == FlappyGestureType::SingleTap) return FlappyAction::Flap;
     return FlappyAction::None;
 }
 

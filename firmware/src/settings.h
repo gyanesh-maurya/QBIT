@@ -75,9 +75,9 @@ void setNegativeGif(bool val);
 bool getTimeFormat24h();
 void setTimeFormat24h(bool val);
 
-// --- Game high score (T-Rex Runner) ---
-uint32_t getGameHighScore();
-void     setGameHighScore(uint32_t score);
+// --- T-Rex Runner high score ---
+uint32_t getTrexHighScore();
+void     setTrexHighScore(uint32_t score);
 
 // --- Flappy Bird high score ---
 uint32_t getFlappyHighScore();
